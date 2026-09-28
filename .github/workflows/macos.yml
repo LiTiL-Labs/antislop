@@ -68,10 +68,12 @@ jobs:
           cp scripts/ci/fake-codex "$HOME/.local/bin/codex"
           chmod +x "$HOME/.local/bin/claude" "$HOME/.local/bin/codex"
           BIN="$(swift build -c release --show-bin-path)"
+          status=0
           pkill -x TextEdit || true; sleep 2
-          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider claude-code --force --out probe-stub-claude.json
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider claude-code --force --out probe-stub-claude.json || status=1
           pkill -x TextEdit || true; sleep 2
-          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider codex --force --out probe-stub-codex.json
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider codex --force --out probe-stub-codex.json || status=1
+          exit $status
 
       - name: Inspect screenshots (OCR and colors)
         if: always()

@@ -114,9 +114,14 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 
 ## What the user needs to do
 
-1. On the Mac: `cd app && ./scripts/build-app.sh && open build/Anti-slop.app`, then grant Accessibility access.
-2. Sign in to both runtimes with your own accounts (settings › Manage), or run `claude auth login` and `codex login` yourself.
-3. Run the one-command live checks (TextEdit must not be open with your documents):
-   `swift build -c release && .build/release/antislop-axprobe e2e --app build/Anti-slop.app --live --provider claude-code --out claude-e2e.json`, then the same with `--provider codex`.
-4. Run the Codex corpus: `swift run antislop-eval corpus --provider codex --out evidence/live/codex-corpus.json`.
-5. Walk through ACCEPTANCE.md's human items: the legal-clause review, voice/tone quality, motion and translucency, VoiceOver, key assignment with a single key and with a reserved key, and multi-display placement.
+1. Sign in to both runtimes with your own accounts: `claude auth login` and `codex login` (choose ChatGPT). Anti-slop never asks for a token.
+2. Give your terminal app Accessibility access (System Settings › Privacy & Security › Accessibility). Save your documents and quit TextEdit.
+3. Run the automated on-Mac acceptance pass, and don't type or click while it runs (about 5–10 minutes, most of it the Codex corpus):
+   ```sh
+   cd app && ./scripts/mac-acceptance.sh        # add --claude-corpus to rerun the Claude corpus on the Mac too
+   ```
+   It runs the tests, builds the app, checks readiness for both providers with a harmless request, runs the TextEdit probe, runs a live end-to-end rewrite through the real app for Claude Code and then Codex (hotkey → panel → live proposal → ⌘Return → verified replacement), and runs the 54-request Codex corpus. It uses synthetic text only.
+4. Send back the folder it prints (`app/evidence/mac/<timestamp>/`), or just the summary at the end of its output. The receipts contain the synthetic fixture text and model rewrites of it, never credentials. I'll review the Codex corpus for fidelity and record the results here.
+5. Walk through ACCEPTANCE.md's human items: the legal-clause review, voice/tone quality, motion and translucency, VoiceOver, key assignment with a single key and with a reserved key, and multi-display placement. Open `build/Anti-slop.app` for these; it is the same app the script tested.
+
+The same live checks can be run one at a time with the commands in [README.md](README.md#checks).

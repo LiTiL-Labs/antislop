@@ -361,7 +361,10 @@ public enum AXProbe {
             if let text = panelEditorText(pid: appPID), !text.isEmpty { proposal = text; break }
         }
         guard let proposal else {
-            record("live_proposal", false, "no proposal appeared in the panel (check the \(provider.displayName) connection in settings)")
+            // The panel's own status or failure message says why (app-authored text only).
+            let shown = panelStaticTexts(pid: appPID).joined(separator: " | ")
+            record("live_proposal", false, "no proposal appeared in the panel; it shows: \(shown.isEmpty ? "(no panel text)" : shown)")
+            shoot("live-panel-failed.png")
             return
         }
         record("live_proposal", true, "\(provider.displayName) proposal: \(proposal)")
@@ -391,6 +394,19 @@ public enum AXProbe {
             if let text = findTextArea(w, depth: 0) { return text }
         }
         return nil
+    }
+
+    /// Visible static text in the app's windows, in tree order.
+    static func panelStaticTexts(pid: pid_t) -> [String] {
+        var out: [String] = []
+        func walk(_ el: AXUIElement, _ depth: Int) {
+            if depth > 12 || out.count >= 12 { return }
+            if AX.string(el, "AXRole") == "AXStaticText", let v = AX.string(el, "AXValue"), !v.isBlank { out.append(v) }
+            for c in (AX.value(el, "AXChildren") as? [AXUIElement]) ?? [] { walk(c, depth + 1) }
+        }
+        let app = AXUIElementCreateApplication(pid)
+        for w in (AX.value(app, "AXWindows") as? [AXUIElement]) ?? [] { walk(w, 0) }
+        return out
     }
 
     static func findTextArea(_ el: AXUIElement, depth: Int) -> String? {

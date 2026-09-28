@@ -40,6 +40,8 @@ Because the build is ad-hoc signed, macOS may ask for Accessibility permission a
 
 ## Checks
 
+For the full on-Mac pass (tests, bundle, readiness for both providers, the TextEdit probe, live end-to-end rewrites in the real app, and the Codex corpus) run `./scripts/mac-acceptance.sh` after signing in to both runtimes and quitting TextEdit. It writes receipts to `evidence/mac/<timestamp>/`. The individual commands are:
+
 ```sh
 cd app
 swift test                                            # unit/contract tests (also run on Linux)
@@ -48,6 +50,7 @@ swift run antislop-eval readiness --provider codex
 swift run antislop-eval corpus --provider claude-code --out evidence/live/claude-code-corpus.json
 swift run antislop-eval corpus --provider codex --out evidence/live/codex-corpus.json
 swift run -c release antislop-axprobe textedit --out probe.json   # drives TextEdit; quit TextEdit first
+swift run -c release antislop-axprobe e2e --app build/Anti-slop.app --live --provider codex --out e2e.json
 ```
 
 `antislop-eval` sends the synthetic fixture corpus (`../fixtures/editorial-cases.json`) through the same provider adapters the app uses. Never point it at private text. `antislop-axprobe` needs Accessibility permission for the terminal that runs it. It opens its own temporary TextEdit documents and checks capture, verified replacement, undo, selection/text/focus drift and the clipboard fallback. `--allow-quit-textedit` also force-quits TextEdit to test the closed-app case, so use it only when no documents of yours are open.

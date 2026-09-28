@@ -237,11 +237,17 @@ enum RuntimeProbe {
         return try? await ProcessRunner.run(spec)
     }
 
+    /// The first `major.minor[.patch]` token, keeping any semver pre-release or
+    /// build suffix, so pre-release runtimes ("0.160.0-alpha.2") are still found.
     static func firstVersionToken(_ text: String) -> String? {
         for token in text.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }) {
-            let t = token.trimmingCharacters(in: CharacterSet(charactersIn: "v(),"))
-            let parts = t.split(separator: ".")
-            if parts.count >= 2, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isNumber }) }) { return t }
+            var t = token.trimmingCharacters(in: CharacterSet(charactersIn: "(),"))
+            if t.hasPrefix("v") { t.removeFirst() }
+            let core = t.prefix { $0 != "-" && $0 != "+" }
+            let parts = core.split(separator: ".", omittingEmptySubsequences: false)
+            let numeric = parts.count >= 2 && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } }
+            let suffixOK = core.count == t.count || t.count > core.count + 1
+            if numeric && suffixOK { return t }
         }
         return nil
     }

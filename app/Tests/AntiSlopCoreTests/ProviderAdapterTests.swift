@@ -283,6 +283,16 @@ final class ProviderAdapterTests: XCTestCase {
         XCTAssertEqual(CodexProvider.featuresToDisable(fromList: list), ["hooks", "unified_exec"])
     }
 
+    func testVersionTokenParsing() {
+        XCTAssertEqual(RuntimeProbe.firstVersionToken("2.1.283 (Claude Code)\n"), "2.1.283")
+        XCTAssertEqual(RuntimeProbe.firstVersionToken("codex-cli 0.158.0"), "0.158.0")
+        XCTAssertEqual(RuntimeProbe.firstVersionToken("codex-cli 0.160.0-alpha.2"), "0.160.0-alpha.2")
+        XCTAssertEqual(RuntimeProbe.firstVersionToken("tool v1.4+build.7"), "1.4+build.7")
+        XCTAssertEqual(RuntimeProbe.firstVersionToken("(2.0.0-dev)"), "2.0.0-dev")
+        XCTAssertNil(RuntimeProbe.firstVersionToken("codex-cli dev"))
+        XCTAssertNil(RuntimeProbe.firstVersionToken("1. 2.x 1.2- ٣.٤"))
+    }
+
     func testFailureClassifier() {
         XCTAssertEqual(FailureClassifier.classify("Claude AI usage limit reached|1760000000", provider: .claudeCode), .accountLimit(.claudeCode))
         XCTAssertEqual(FailureClassifier.classify("OAuth token has expired. Please run /login", provider: .claudeCode), .signInNeeded(.claudeCode))
