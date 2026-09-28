@@ -523,7 +523,7 @@ final class PanelController {
         }
         p.setFrame(start, display: false)
         p.alphaValue = 0
-        NSApp.activate(ignoringOtherApps: true)
+        activateAntiSlop()
         p.makeKeyAndOrderFront(nil)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.19
@@ -536,7 +536,7 @@ final class PanelController {
     func focus(heldKeyCode: UInt16? = nil) {
         guard let p = panel, p.isVisible else { return }
         p.heldTriggerKeyCode = heldKeyCode
-        NSApp.activate(ignoringOtherApps: true)
+        activateAntiSlop()
         p.makeKeyAndOrderFront(nil)
     }
 

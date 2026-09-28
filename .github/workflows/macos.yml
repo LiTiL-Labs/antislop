@@ -48,18 +48,21 @@ jobs:
 
       - name: Accessibility probe against TextEdit
         continue-on-error: true
+        timeout-minutes: 6
         run: |
           BIN="$(swift build -c release --show-bin-path)"
           "$BIN/antislop-axprobe" textedit --allow-quit-textedit --force --out probe-textedit.json
 
       - name: End-to-end with fixture provider
         continue-on-error: true
+        timeout-minutes: 6
         run: |
           BIN="$(swift build -c release --show-bin-path)"
           "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --shots shots
 
       - name: Live-mode end to end against stub runtimes (not live AI)
         continue-on-error: true
+        timeout-minutes: 6
         run: |
           # Stub CLIs where the app's runtime discovery looks first. This exercises the
           # real provider code path in the real app; it is not a live provider test.

@@ -303,7 +303,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func openSettings() {
         if let w = settingsWindow, w.isVisible {
-            NSApp.activate(ignoringOtherApps: true)
+            activateAntiSlop()
             w.makeKeyAndOrderFront(nil)
             return
         }
@@ -313,13 +313,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.canRegister = { [weak self] b in self?.hotKeys.canRegister(b) ?? OSStatus(-1) }
         model.systemHotKeys = { SystemShortcuts.enabled() }
         model.onDone = { [weak self] new in self?.commit(new) }
-        model.onClose = { [weak self] in
-            self?.settingsWindow?.close()
-            // Hand focus back so the (new) key works right away, not after a click elsewhere.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                MainActor.assumeIsolated { self?.stepBackIfIdle() }
-            }
-        }
+        model.onClose = { [weak self] in self?.settingsWindow?.close() }
         model.onSignIn = { [weak self] p in self?.signIn(p) }
         model.onCheck = { [weak self] p in self?.checkReadiness(p) }
         model.onAcknowledgements = { [weak self] in self?.showAcknowledgements() }
@@ -338,7 +332,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         window.center()
         settingsWindow = window
-        NSApp.activate(ignoringOtherApps: true)
+        activateAntiSlop()
         window.makeKeyAndOrderFront(nil)
         DevSnapshot.write(window, name: "app-settings.png", after: 1.2)
 
@@ -421,7 +415,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     @objc func showAcknowledgements() {
         if let w = acknowledgementsWindow {
-            NSApp.activate(ignoringOtherApps: true)
+            activateAntiSlop()
             w.makeKeyAndOrderFront(nil)
             return
         }
@@ -439,7 +433,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         window.contentView = scroll
         window.center()
         acknowledgementsWindow = window
-        NSApp.activate(ignoringOtherApps: true)
+        activateAntiSlop()
         window.makeKeyAndOrderFront(nil)
     }
 }

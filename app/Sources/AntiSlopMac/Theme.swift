@@ -7,6 +7,13 @@ func onMainAsync(_ body: @escaping @MainActor () -> Void) {
     DispatchQueue.main.async { MainActor.assumeIsolated { body() } }
 }
 
+/// Bring Anti-slop forward to show one of its windows, unhiding it first if it
+/// stepped back after closing its panel (a hidden app's windows stay hidden).
+@MainActor func activateAntiSlop() {
+    if NSApp.isHidden { NSApp.unhide(nil) }
+    NSApp.activate(ignoringOtherApps: true)
+}
+
 /// Visual tokens from UX.md (engineering starting values).
 enum Theme {
     static func rgb(_ hex: UInt32, _ alpha: Double = 1) -> Color {

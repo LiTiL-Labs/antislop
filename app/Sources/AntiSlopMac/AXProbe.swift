@@ -370,7 +370,7 @@ public enum AXProbe {
     /// invalid one and cancel a recording without losing it; Done saves and
     /// registers the new key, which then triggers the panel.
     static func recorderChecks(pid: pid_t, settingsURL: URL) async {
-        let app = AXUIElementCreateApplication(pid)
+        let app = probeElement(pid)
         func press(_ label: String) async -> Bool {
             var ok = false
             if let b = findPressable(app, label) {
@@ -561,7 +561,7 @@ public enum AXProbe {
     /// Where keyboard input is going: frontmost app, the app's focused element, panel visibility.
     static func focusReport(pid: pid_t) async -> String {
         let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
-        let app = AXUIElementCreateApplication(pid)
+        let app = probeElement(pid)
         let focused = AX.element(app, "AXFocusedUIElement")
         let role = focused.flatMap { AX.string($0, "AXRole") } ?? "none"
         let label = focused.flatMap { AX.string($0, "AXDescription") ?? AX.string($0, "AXTitle") } ?? ""
@@ -589,6 +589,14 @@ public enum AXProbe {
         }
         walk(root, 0)
         return out
+    }
+
+    /// The app's Accessibility element with a short messaging timeout, so an
+    /// unresponsive app fails a check quickly instead of stalling the probe.
+    static func probeElement(_ pid: pid_t) -> AXUIElement {
+        let el = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(el, 1.0)
+        return el
     }
 
     static func actionNames(_ el: AXUIElement) -> [String] {
@@ -683,7 +691,7 @@ public enum AXProbe {
 
     /// The panel's draft editor text, read through Accessibility.
     static func panelEditorText(pid: pid_t) -> String? {
-        let app = AXUIElementCreateApplication(pid)
+        let app = probeElement(pid)
         guard let windows = AX.value(app, "AXWindows") as? [AXUIElement] else { return nil }
         for w in windows {
             if let text = findTextArea(w, depth: 0) { return text }
@@ -699,7 +707,7 @@ public enum AXProbe {
             if AX.string(el, "AXRole") == "AXStaticText", let v = AX.string(el, "AXValue"), !v.isBlank { out.append(v) }
             for c in (AX.value(el, "AXChildren") as? [AXUIElement]) ?? [] { walk(c, depth + 1) }
         }
-        let app = AXUIElementCreateApplication(pid)
+        let app = probeElement(pid)
         for w in (AX.value(app, "AXWindows") as? [AXUIElement]) ?? [] { walk(w, 0) }
         return out
     }
