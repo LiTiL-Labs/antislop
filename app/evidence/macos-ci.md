@@ -1,6 +1,6 @@
 # macOS runner evidence
 
-Source: the `macOS build and checks` workflow ([`.github/workflows/macos.yml`](../../.github/workflows/macos.yml)) on branch `claude/anti-slop-macos-dev-ay9m4k`, run 3 (commit `59a2fd3`), job `build-and-check`.
+Source: the `macOS build and checks` workflow ([`.github/workflows/macos.yml`](../../.github/workflows/macos.yml)) on branch `claude/anti-slop-macos-dev-ay9m4k`, job `build-and-check`. The results below were identical on runs 3, 4, 6 and 7 (latest: run 7, commit `41e369e`).
 
 | Item | Value |
 |---|---|
@@ -54,6 +54,6 @@ The app renders its own windows when `ANTISLOP_SNAPSHOT_DIR` is set (developer/C
 | Panel, ready (430×317 pt) | "Anti-slop", "Fixture: looks like plain te…" plus the "Fixture preview — not live AI" badge, the draft, the fixture note, "⌘ Return to apply", "Anti-slop" button | shell #F8F7F5, editor #FFFEFF, button #292928 (enabled, near-black) |
 | Settings (540×644 pt, top of scroll) | "Settings", "Keyboard shortcut", "Not set", "Assign anti-slop key", "Choose any supported key or combination.", "AI connection", "Codex" / "Claude Code", "Claude account • Fixture only (not live)", "Manage", the data-flow line, "Style guidance", "No AI Slop" / "Humanizer" / "None", "Light, proportional edits. Recommended.", "Simplify wording", "Keep my tone", "More writing options" | white |
 
-Finding: in the self-rendered ready panel, OCR read only the end of the draft ("…luce errors for some teams"), positioned left of the editor inset. The editor now uses the standard scrolling-text-view setup, and new drafts start scrolled to the beginning. See run 7 or later for the re-check.
+Finding and fix: in run 6, OCR of the self-rendered ready panel read only the end of the draft ("…luce errors for some teams"), positioned left of the editor inset. The editor was changed to the standard scrolling-text-view setup, and new drafts now start scrolled to the beginning. Run 7 (commit `41e369e`) re-checked it: the self-rendered and the window-server (`screencapture -l`) images both read "The pilot may reduce errors for some teams" inside the editor. The run-7 window-server captures also show "Rewriting…" with the disabled button while generating, and the intent, draft, note and enabled button when ready. All 15 TextEdit checks, all 7 end-to-end checks and all 80 unit tests passed again.
 
 Not covered here: live providers (no credentials are placed in CI), VoiceOver, motion quality, multiple displays, first-run permission prompts, and real-user keyboard layouts.
