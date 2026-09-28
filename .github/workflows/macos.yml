@@ -62,7 +62,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          ls shots/*.png >/dev/null 2>&1 && swift scripts/inspect-shots.swift shots/app-panel-generating.png shots/app-panel-ready.png shots/app-settings.png 2>&1 | tee inspect.log || true
+          ls shots/*.png >/dev/null 2>&1 && swift scripts/inspect-shots.swift shots/app-panel-generating.png shots/app-panel-ready.png shots/app-settings.png shots/panel-processing.png shots/panel-ready.png 2>&1 | tee inspect.log || true
 
       - name: Compress screenshots
         if: always()

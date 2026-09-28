@@ -108,6 +108,10 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 - Latency: Claude Code median about 3.6 s (range 3.0–5.8 s) on the corpus. The rewrite timeout starts at 90 s.
 - Intent lines from the model are often longer and less tentative than the UX examples (see the [corpus review](evidence/claude-code-corpus-review.md)). A prompt 0.3 tweak is proposed, not made.
 
+## CI note
+
+`.github/workflows/macos.yml` runs on pushes to this development branch that touch `app/`, `prompts/`, `fixtures/`, `schemas/` or `third_party/`, and on manual dispatch. It uses a GitHub-hosted macOS runner (about 2 minutes a run; macOS minutes count at a multiple of Linux minutes on private repositories), plus four short Linux jobs that print screenshots into their logs. No secrets are used, and no provider credentials exist in CI. Remove or narrow the workflow if you don't want it to spend Actions minutes.
+
 ## What the user needs to do
 
 1. On the Mac: `cd app && ./scripts/build-app.sh && open build/Anti-slop.app`, then grant Accessibility access.

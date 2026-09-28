@@ -303,13 +303,18 @@ struct DraftEditor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
+        // Apple's standard scrolling text view recipe: give the scroll view a real
+        // frame first so the text view's width autoresizing starts from the
+        // correct size, then let the text container track that width.
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: Theme.panelWidth - 40, height: 150))
         scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
+        let contentSize = scroll.contentSize
 
-        let tv = DraftTextView(frame: NSRect(x: 0, y: 0, width: Theme.panelWidth - 40, height: 100))
+        let tv = DraftTextView(frame: NSRect(origin: .zero, size: contentSize))
         tv.isRichText = false
         tv.importsGraphics = false
         tv.allowsUndo = true
@@ -326,11 +331,12 @@ struct DraftEditor: NSViewRepresentable {
         tv.backgroundColor = .white
         tv.drawsBackground = false
         tv.textContainerInset = NSSize(width: 10, height: 10)
-        tv.minSize = NSSize(width: 0, height: 0)
+        tv.minSize = NSSize(width: 0, height: contentSize.height)
         tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
         tv.autoresizingMask = [.width]
+        tv.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         tv.textContainer?.widthTracksTextView = true
         tv.string = text
         tv.delegate = context.coordinator
@@ -349,8 +355,15 @@ struct DraftEditor: NSViewRepresentable {
         guard let tv = scroll.documentView as? DraftTextView else { return }
         tv.onCommandReturn = onCommandReturn
         tv.onEscape = onEscape
+        // Keep the document view exactly as wide as the visible area.
+        let visibleWidth = scroll.contentSize.width
+        if visibleWidth > 0, abs(tv.frame.width - visibleWidth) > 0.5 {
+            tv.setFrameSize(NSSize(width: visibleWidth, height: tv.frame.height))
+        }
         if tv.string != text {
             tv.string = text
+            tv.setSelectedRange(NSRange(location: 0, length: 0))
+            tv.scrollToBeginningOfDocument(nil)
             context.coordinator.reportHeight()
         }
         tv.isEditable = isEditable
