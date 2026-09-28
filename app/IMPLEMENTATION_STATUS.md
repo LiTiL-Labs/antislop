@@ -9,7 +9,7 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 | Label | Meaning |
 |---|---|
 | **Auto** | XCTest suite (80 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
-| **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle |
+| **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle ([results](evidence/macos-ci.md)) |
 | **Fixture** | The development `FixtureProvider`, clearly labelled in the UI. It is never a live connection. |
 | **Live-Claude** | The official Claude Code CLI 2.1.283 driven by the app's adapter code, from the Linux container, using the CLI's own stored account sign-in |
 | **Not run / Human** | Needs the user's Mac, sign-in or judgment |
