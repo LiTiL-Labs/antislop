@@ -93,7 +93,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         coordinator.diagnostics = { [weak self] line in self?.log.info("\(line, privacy: .public)") }
         wirePanel()
 
-        hotKeys.onPress = { [weak self] in self?.handleTrigger() }
+        hotKeys.onPress = { [weak self] in self?.handleTrigger(fromKey: true) }
         if let s = settings.shortcut {
             let status = hotKeys.apply(s)
             if status != 0 {
@@ -189,7 +189,9 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     // MARK: Trigger → capture → panel
 
-    func handleTrigger() {
+    /// `fromKey` is true when the assigned key (which may still be held) started it.
+    func handleTrigger(fromKey: Bool = false) {
+        let held = fromKey ? hotKeys.binding.map { UInt16($0.keyCode) } : nil
         if !AX.trusted(prompt: false) {
             toast.show(CaptureRefusal.accessibilityNotTrusted.message)
             openSettings()
@@ -201,10 +203,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         case .started:
             panel.model.reset()
             panel.model.update(from: coordinator.session)
-            panel.show(anchor: coordinator.snapshot?.selectionBounds)
+            panel.show(anchor: coordinator.snapshot?.selectionBounds, heldKeyCode: held)
             DevSnapshot.write(panel.window, name: "app-panel-generating.png", after: 0.3)
         case .focusExisting:
-            panel.focus()
+            panel.focus(heldKeyCode: held)
         case .refused(let r):
             toast.show(r.message)
             if r == .accessibilityNotTrusted { openSettings() }

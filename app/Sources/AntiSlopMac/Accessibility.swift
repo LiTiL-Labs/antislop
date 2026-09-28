@@ -360,6 +360,29 @@ enum KeyboardEvents {
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }
+
+    /// One key transition through the HID tap; `autorepeat` marks a held key's repeat (probe only).
+    static func postKey(_ keyCode: CGKeyCode, down: Bool, flags: CGEventFlags = [], autorepeat: Bool = false) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        guard let e = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: down) else { return }
+        e.flags = flags
+        if autorepeat { e.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
+        e.post(tap: .cghidEventTap)
+    }
+
+    /// Type text as keyboard input, one character at a time (probe only).
+    static func typeText(_ text: String) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        for ch in text {
+            let units = Array(String(ch).utf16)
+            for down in [true, false] {
+                guard let e = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down) else { continue }
+                e.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+                e.post(tap: .cghidEventTap)
+            }
+            usleep(15_000)
+        }
+    }
 }
 
 /// NSPasteboard adapter that snapshots every item's data for each declared type.

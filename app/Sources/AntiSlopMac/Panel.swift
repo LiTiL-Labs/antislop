@@ -446,6 +446,19 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    /// The trigger key while it may still be held as the panel takes focus.
+    /// Its auto-repeat is dropped, so holding the key never types into the draft.
+    var heldTriggerKeyCode: UInt16?
+
+    override func sendEvent(_ event: NSEvent) {
+        if let held = heldTriggerKeyCode, event.type == .keyDown || event.type == .keyUp {
+            if event.keyCode == held && event.type == .keyUp { heldTriggerKeyCode = nil; return }
+            if event.keyCode == held && event.isARepeat { return }
+            heldTriggerKeyCode = nil
+        }
+        super.sendEvent(event)
+    }
+
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
     }
@@ -481,9 +494,10 @@ final class PanelController {
         return p
     }
 
-    func show(anchor: PanelRect?) {
+    func show(anchor: PanelRect?, heldKeyCode: UInt16? = nil) {
         showGeneration += 1
         let p = ensurePanel()
+        p.heldTriggerKeyCode = heldKeyCode
         let size = hosting?.fittingSize ?? NSSize(width: Theme.panelWidth, height: 320)
         let frames = NSScreen.screens.map { s -> PanelRect in
             let v = s.visibleFrame
@@ -519,8 +533,9 @@ final class PanelController {
         }
     }
 
-    func focus() {
+    func focus(heldKeyCode: UInt16? = nil) {
         guard let p = panel, p.isVisible else { return }
+        p.heldTriggerKeyCode = heldKeyCode
         NSApp.activate(ignoringOtherApps: true)
         p.makeKeyAndOrderFront(nil)
     }

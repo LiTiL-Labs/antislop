@@ -221,6 +221,28 @@ public enum AXProbe {
             record("paste_fallback_confirmed", false, "could not refocus the first document")
         }
 
+        // A14: a partial word and a span with boundary spaces are captured and replaced exactly.
+        await waitFrontmost(app)
+        _ = AX.set(el, "AXValue", original as CFString)
+        var partialOK = true
+        var partialDetail: [String] = []
+        for (piece, with) in [("ilo", "ILO"), (" may reduce ", " might reduce ")] {
+            let doc = AX.string(el, "AXValue") ?? ""
+            _ = select(el, piece, in: doc)
+            guard case .success(let s) = capturer.captureFocusedSelection(), s.captured.selectedText == piece else {
+                partialOK = false
+                partialDetail.append("\(piece.debugDescription): capture did not match")
+                continue
+            }
+            let o = await replacer.replace(s, with: with)
+            let expectedDoc = (doc as NSString).replacingCharacters(in: (doc as NSString).range(of: piece), with: with)
+            let ok = o == .confirmed(.accessibilitySelectedText) && AX.string(el, "AXValue") == expectedDoc
+            partialOK = partialOK && ok
+            partialDetail.append("\(piece.debugDescription) → \(with.debugDescription): \(ok ? "exact splice" : "outcome=\(o)")")
+        }
+        record("partial_selection_exact", partialOK, partialDetail.joined(separator: "; "))
+        _ = AX.set(el, "AXValue", original as CFString)
+
         // A29: the original app closing blocks the write.
         if allowQuit {
             _ = select(el, target, in: original)
@@ -331,8 +353,213 @@ public enum AXProbe {
             if let shots, let id = frontWindowID(pid: again.processIdentifier, normalLayer: true) {
                 capture((shots as NSString).appendingPathComponent("settings.png"), windowID: id)
             }
+            if settingsShown {
+                await recorderChecks(pid: again.processIdentifier, settingsURL: settingsURL)
+            }
             again.terminate()
+            again.waitUntilExit()
         }
+        await singleKeyChecks(exe: exe, env: env, settingsURL: settingsURL)
+    }
+
+    // MARK: Key assignment and panel editing (fixture provider)
+
+    /// A04/A05 on the real settings screen: record a combination, refuse an
+    /// invalid one and cancel a recording without losing it; Done saves and
+    /// registers the new key, which then triggers the panel.
+    static func recorderChecks(pid: pid_t, settingsURL: URL) async {
+        let app = AXUIElementCreateApplication(pid)
+        func press(_ label: String) async -> Bool {
+            guard let b = findElement(app, { el in
+                AX.string(el, "AXRole") == "AXButton" && elementTexts(el, depth: 2).contains(label)
+            }) else { return false }
+            let ok = AXUIElementPerformAction(b, "AXPress" as CFString) == .success
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            return ok
+        }
+        func screenText() -> String { elementTexts(app, depth: 30).joined(separator: " | ") }
+        func currentKey() -> String {
+            elementTexts(app, depth: 30).first { $0.hasPrefix("Current key:") } ?? "(no current-key label)"
+        }
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [])
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        guard await press("Assign anti-slop key") else {
+            record("recorder_records_combination", false, "no Assign anti-slop key button; screen shows: \(screenText().prefix(300))")
+            return
+        }
+        KeyboardEvents.postChord(keyCode: 0x28, flags: [.maskControl, .maskAlternate, .maskCommand]) // ⌃⌥⌘K
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        let recorded = screenText().contains("K is ready to use after you choose Done.")
+        record("recorder_records_combination", recorded && currentKey().contains("K"),
+               "\(currentKey()); message shown: \(recorded)")
+
+        // Fn/Globe combinations can't be registered on macOS: specific feedback, previous key kept.
+        _ = await press("Assign anti-slop key")
+        KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskSecondaryFn])
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        let refused = screenText().contains("Fn/Globe")
+        record("recorder_refuses_invalid_keeps_previous", refused && currentKey().contains("K"),
+               "\(currentKey()); Fn/Globe explanation shown: \(refused)")
+
+        _ = await press("Assign anti-slop key")
+        let cancelled = await press("Cancel")
+        record("recorder_cancel_keeps_previous", cancelled && currentKey().contains("K"),
+               "Cancel pressed: \(cancelled); \(currentKey())")
+
+        let done = await press("Done")
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        var saved = "unreadable"
+        if case .loaded(let s) = SettingsStore(fileURL: settingsURL).load(), let k = s.shortcut {
+            saved = "key_code \(k.keyCode) modifiers \(k.modifiers.map(\.rawValue).sorted())"
+        }
+        record("done_saves_new_key", done && saved == "key_code 40 modifiers [\"command\", \"control\", \"option\"]",
+               "Done pressed: \(done); settings file has \(saved)")
+
+        let docName = "anti-slop-recorder-\(UUID().uuidString.prefix(8)).txt"
+        guard let (textEdit, el) = await openDocument(named: docName, text: original) else {
+            record("new_key_triggers", false, "TextEdit document did not become focused")
+            return
+        }
+        await waitFrontmost(textEdit)
+        _ = select(el, target, in: original)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        KeyboardEvents.postChord(keyCode: 0x28, flags: [.maskControl, .maskAlternate, .maskCommand])
+        let appeared = await waitForWindow(pid: pid)
+        record("new_key_triggers", appeared, appeared ? "the newly assigned ⌃⌥⌘K opened the panel" : "no panel after ⌃⌥⌘K")
+        // Let the panel reach Ready before closing it, so any self-rendered snapshot shows a settled panel.
+        _ = await waitForEditorText(pid: pid)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        KeyboardEvents.postChord(keyCode: 0x35, flags: [])
+        try? await Task.sleep(nanoseconds: 600_000_000)
+    }
+
+    /// A03/A06/A28 with an unmodified single key (`) as the trigger: holding it
+    /// opens one panel and types nothing; inside the panel the key types
+    /// normally and Return adds a newline; an empty draft can't be applied; the
+    /// edited draft is applied once; the key triggers again afterwards.
+    static func singleKeyChecks(exe: URL, env: [String: String], settingsURL: URL) async {
+        let grave: CGKeyCode = 0x32
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(
+            providerID: .claudeCode, shortcut: ShortcutBinding(keyCode: Int(grave), displayLabel: "`", modifiers: [])))
+        let proc = Process()
+        proc.executableURL = exe
+        // No self-rendered snapshots here: edits would overwrite the ready-panel image.
+        proc.environment = env.filter { $0.key != "ANTISLOP_SNAPSHOT_DIR" }
+        guard (try? proc.run()) != nil else {
+            record("single_key_triggers", false, "could not launch \(exe.path)")
+            return
+        }
+        defer { proc.terminate() }
+        let pid = proc.processIdentifier
+        try? await Task.sleep(nanoseconds: 2_500_000_000)
+        let docName = "anti-slop-keys-\(UUID().uuidString.prefix(8)).txt"
+        guard let (app, el) = await openDocument(named: docName, text: original) else {
+            record("single_key_triggers", false, "TextEdit document did not become focused")
+            return
+        }
+        await waitFrontmost(app)
+        _ = select(el, target, in: original)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        // Hold the key: press, auto-repeat after the usual delay, release.
+        KeyboardEvents.postKey(grave, down: true)
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        for _ in 0..<6 {
+            KeyboardEvents.postKey(grave, down: true, autorepeat: true)
+            try? await Task.sleep(nanoseconds: 80_000_000)
+        }
+        KeyboardEvents.postKey(grave, down: false)
+        let appeared = await waitForWindow(pid: pid)
+        let draft = await waitForEditorText(pid: pid)
+        let untouched = AX.string(el, "AXValue") == original
+        record("single_key_triggers", appeared && untouched,
+               appeared ? "unmodified ` opened the panel; the document received no character: \(untouched)" : "no panel")
+        let panels = windows(pid: pid).filter { (($0[kCGWindowLayer as String] as? Int) ?? 0) > 0 }.count
+        record("held_key_one_activation", draft == replacement && panels == 1,
+               "\(panels) panel window(s); draft: \(draft?.debugDescription ?? "none")")
+
+        // A28: an empty editor can't be applied.
+        KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand) // ⌘A in the editor
+        KeyboardEvents.postChord(keyCode: 0x33, flags: [])           // Delete
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        let panelOpen = await isPanelVisible(pid: pid)
+        let blankKept = AX.string(el, "AXValue") == original && (panelEditorText(pid: pid) ?? "x").isEmpty && panelOpen
+        record("blank_draft_not_applied", blankKept,
+               "document unchanged and panel open: \(blankKept); panel says: \(panelStaticTexts(pid: pid).joined(separator: " | "))")
+
+        // A06/A28: inside the panel the assigned key types normally and Return adds a newline.
+        KeyboardEvents.typeText("Edited by hand")
+        KeyboardEvents.postChord(keyCode: grave, flags: [])
+        KeyboardEvents.postChord(keyCode: 0x24, flags: [])
+        KeyboardEvents.typeText("second line.")
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        let edited = panelEditorText(pid: pid) ?? ""
+        let expectedEdit = "Edited by hand`\nsecond line."
+        let stillOriginal = AX.string(el, "AXValue") == original
+        record("assigned_key_types_in_panel", edited.hasPrefix("Edited by hand`") && stillOriginal,
+               "editor reads \(edited.debugDescription); document unchanged: \(stillOriginal)")
+        record("return_inserts_newline", edited == expectedEdit && stillOriginal,
+               "Return added a newline and did not apply: \(edited == expectedEdit && stillOriginal)")
+
+        // A28/A30: the edited draft is applied once, only over the selection.
+        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
+        var final: String? = nil
+        for _ in 0..<40 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if let v = AX.string(el, "AXValue"), v != original { final = v; break }
+        }
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        let expectedDoc = original.replacingOccurrences(of: target, with: expectedEdit)
+        let settled = AX.string(el, "AXValue")
+        record("edited_draft_applied_once", final == expectedDoc && settled == expectedDoc,
+               final == expectedDoc ? "document now holds the edited draft exactly once" : "document: \(settled.debugDescription)")
+        record("panel_closes_after_edited_apply", !(await isPanelVisible(pid: pid)), "panel dismissed after confirmed replacement")
+
+        // A06: with Anti-slop inactive again, the key is registered again.
+        await waitFrontmost(app)
+        let now = AX.string(el, "AXValue") ?? ""
+        _ = select(el, "Closing sentence stays.", in: now)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        KeyboardEvents.postChord(keyCode: grave, flags: [])
+        let again = await waitForWindow(pid: pid)
+        record("key_triggers_again_after_panel", again && AX.string(el, "AXValue") == now,
+               again ? "` opened the panel again; the document received no character" : "no panel on the second press")
+        KeyboardEvents.postChord(keyCode: 0x35, flags: [])
+        try? await Task.sleep(nanoseconds: 600_000_000)
+    }
+
+    static func waitForEditorText(pid: pid_t, seconds: Double = 6) async -> String? {
+        for _ in 0..<Int(seconds * 10) {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if let t = panelEditorText(pid: pid), !t.isEmpty { return t }
+        }
+        return nil
+    }
+
+    /// Text an element exposes (value, title, description), with its descendants', in tree order.
+    static func elementTexts(_ root: AXUIElement, depth: Int) -> [String] {
+        var out: [String] = []
+        func walk(_ el: AXUIElement, _ d: Int) {
+            for attr in ["AXValue", "AXTitle", "AXDescription"] {
+                if let s = AX.string(el, attr), !s.isBlank { out.append(s) }
+            }
+            guard d < depth else { return }
+            for c in (AX.value(el, "AXChildren") as? [AXUIElement]) ?? [] { walk(c, d + 1) }
+        }
+        walk(root, 0)
+        return out
+    }
+
+    static func findElement(_ root: AXUIElement, _ match: (AXUIElement) -> Bool, depth: Int = 0) -> AXUIElement? {
+        if match(root) { return root }
+        guard depth < 30 else { return nil }
+        for c in (AX.value(root, "AXChildren") as? [AXUIElement]) ?? [] {
+            if let hit = findElement(c, match, depth: depth + 1) { return hit }
+        }
+        return nil
     }
 
     static func windows(pid: pid_t) -> [[String: Any]] {
