@@ -370,6 +370,15 @@ enum KeyboardEvents {
         e.post(tap: .cghidEventTap)
     }
 
+    /// Left click at a screen point (top-left origin), probe only.
+    static func click(at point: CGPoint) {
+        let src = CGEventSource(stateID: .hidSystemState)
+        for type in [CGEventType.leftMouseDown, .leftMouseUp] {
+            CGEvent(mouseEventSource: src, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
+                .post(tap: .cghidEventTap)
+        }
+    }
+
     /// Type text as keyboard input, one character at a time (probe only).
     static func typeText(_ text: String) {
         let src = CGEventSource(stateID: .hidSystemState)

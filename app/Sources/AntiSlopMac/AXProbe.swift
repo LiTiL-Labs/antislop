@@ -370,10 +370,13 @@ public enum AXProbe {
     static func recorderChecks(pid: pid_t, settingsURL: URL) async {
         let app = AXUIElementCreateApplication(pid)
         func press(_ label: String) async -> Bool {
-            guard let b = findElement(app, { el in
-                AX.string(el, "AXRole") == "AXButton" && elementTexts(el, depth: 2).contains(label)
-            }) else { return false }
-            let ok = AXUIElementPerformAction(b, "AXPress" as CFString) == .success
+            var ok = false
+            if let b = findPressable(app, label) {
+                ok = AXUIElementPerformAction(b, "AXPress" as CFString) == .success
+            } else if let t = findElement(app, { elementTexts($0, depth: 0).contains(label) }), let f = frame(of: t) {
+                KeyboardEvents.click(at: CGPoint(x: f.midX, y: f.midY))
+                ok = true
+            }
             try? await Task.sleep(nanoseconds: 500_000_000)
             return ok
         }
@@ -475,22 +478,16 @@ public enum AXProbe {
         let untouched = AX.string(el, "AXValue") == original
         record("single_key_triggers", appeared && untouched,
                appeared ? "unmodified ` opened the panel; the document received no character: \(untouched)" : "no panel")
-        let panels = windows(pid: pid).filter { (($0[kCGWindowLayer as String] as? Int) ?? 0) > 0 }.count
+        let panels = windows(pid: pid).filter { w in
+            let layer = (w[kCGWindowLayer as String] as? Int) ?? 0
+            return layer > 0 && layer < 20
+        }.count
         record("held_key_one_activation", draft == replacement && panels == 1,
                "\(panels) panel window(s); draft: \(draft?.debugDescription ?? "none")")
 
-        // A28: an empty editor can't be applied.
-        KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand) // ⌘A in the editor
-        KeyboardEvents.postChord(keyCode: 0x33, flags: [])           // Delete
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        let panelOpen = await isPanelVisible(pid: pid)
-        let blankKept = AX.string(el, "AXValue") == original && (panelEditorText(pid: pid) ?? "x").isEmpty && panelOpen
-        record("blank_draft_not_applied", blankKept,
-               "document unchanged and panel open: \(blankKept); panel says: \(panelStaticTexts(pid: pid).joined(separator: " | "))")
-
         // A06/A28: inside the panel the assigned key types normally and Return adds a newline.
+        KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand) // ⌘A in the editor
+        try? await Task.sleep(nanoseconds: 200_000_000)
         KeyboardEvents.typeText("Edited by hand")
         KeyboardEvents.postChord(keyCode: grave, flags: [])
         KeyboardEvents.postChord(keyCode: 0x24, flags: [])
@@ -499,8 +496,9 @@ public enum AXProbe {
         let edited = panelEditorText(pid: pid) ?? ""
         let expectedEdit = "Edited by hand`\nsecond line."
         let stillOriginal = AX.string(el, "AXValue") == original
+        let editFocus = await focusReport(pid: pid)
         record("assigned_key_types_in_panel", edited.hasPrefix("Edited by hand`") && stillOriginal,
-               "editor reads \(edited.debugDescription); document unchanged: \(stillOriginal)")
+               "editor reads \(edited.debugDescription); document unchanged: \(stillOriginal); \(editFocus)")
         record("return_inserts_newline", edited == expectedEdit && stillOriginal,
                "Return added a newline and did not apply: \(edited == expectedEdit && stillOriginal)")
 
@@ -525,10 +523,44 @@ public enum AXProbe {
         try? await Task.sleep(nanoseconds: 300_000_000)
         KeyboardEvents.postChord(keyCode: grave, flags: [])
         let again = await waitForWindow(pid: pid)
+        _ = await waitForEditorText(pid: pid)
         record("key_triggers_again_after_panel", again && AX.string(el, "AXValue") == now,
                again ? "` opened the panel again; the document received no character" : "no panel on the second press")
+
+        // A28: an empty editor can't be applied, and typing continues in the editor afterwards.
+        KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand)
+        KeyboardEvents.postChord(keyCode: 0x33, flags: [])           // Delete
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let emptied = panelEditorText(pid: pid) ?? "(no editor)"
+        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        let panelOpen = await isPanelVisible(pid: pid)
+        let blankKept = AX.string(el, "AXValue") == now && emptied.isEmpty && panelOpen
+        record("blank_draft_not_applied", blankKept,
+               "editor before ⌘Return \(emptied.debugDescription); document unchanged and panel open: \(blankKept); panel says: \(panelStaticTexts(pid: pid).joined(separator: " | "))")
+        KeyboardEvents.typeText("Kept typing.")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        let afterBlank = panelEditorText(pid: pid) ?? "(no editor)"
+        let stillOpen = await isPanelVisible(pid: pid)
+        let blankFocus = await focusReport(pid: pid)
+        record("typing_continues_after_blocked_apply", afterBlank == "Kept typing." && stillOpen,
+               "editor reads \(afterBlank.debugDescription); \(blankFocus)")
         KeyboardEvents.postChord(keyCode: 0x35, flags: [])
         try? await Task.sleep(nanoseconds: 600_000_000)
+        let closedByEscape = !(await isPanelVisible(pid: pid))
+        record("escape_after_edits_no_change", AX.string(el, "AXValue") == now && closedByEscape,
+               "Escape closed the panel: \(closedByEscape); document unchanged: \(AX.string(el, "AXValue") == now)")
+    }
+
+    /// Where keyboard input is going: frontmost app, the app's focused element, panel visibility.
+    static func focusReport(pid: pid_t) async -> String {
+        let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+        let app = AXUIElementCreateApplication(pid)
+        let focused = AX.element(app, "AXFocusedUIElement")
+        let role = focused.flatMap { AX.string($0, "AXRole") } ?? "none"
+        let label = focused.flatMap { AX.string($0, "AXDescription") ?? AX.string($0, "AXTitle") } ?? ""
+        let visible = await isPanelVisible(pid: pid)
+        return "frontmost \(front); Anti-slop focus \(role) \(label.debugDescription); panel visible \(visible)"
     }
 
     static func waitForEditorText(pid: pid_t, seconds: Double = 6) async -> String? {
@@ -551,6 +583,31 @@ public enum AXProbe {
         }
         walk(root, 0)
         return out
+    }
+
+    static func actionNames(_ el: AXUIElement) -> [String] {
+        var names: CFArray?
+        guard AXUIElementCopyActionNames(el, &names) == .success, let list = names as? [String] else { return [] }
+        return list
+    }
+
+    /// The innermost element that can be pressed and shows `label`.
+    static func findPressable(_ root: AXUIElement, _ label: String, depth: Int = 0) -> AXUIElement? {
+        guard depth < 30 else { return nil }
+        for c in (AX.value(root, "AXChildren") as? [AXUIElement]) ?? [] {
+            if let hit = findPressable(c, label, depth: depth + 1) { return hit }
+        }
+        if actionNames(root).contains("AXPress"), elementTexts(root, depth: 3).contains(label) { return root }
+        return nil
+    }
+
+    /// Screen frame (top-left origin, as CGEvent uses) of an element.
+    static func frame(of el: AXUIElement) -> CGRect? {
+        guard let pv = AX.value(el, "AXPosition"), let sv = AX.value(el, "AXSize"),
+              CFGetTypeID(pv) == AXValueGetTypeID(), CFGetTypeID(sv) == AXValueGetTypeID() else { return nil }
+        var p = CGPoint.zero, sz = CGSize.zero
+        guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &sz) else { return nil }
+        return CGRect(origin: p, size: sz)
     }
 
     static func findElement(_ root: AXUIElement, _ match: (AXUIElement) -> Bool, depth: Int = 0) -> AXUIElement? {
