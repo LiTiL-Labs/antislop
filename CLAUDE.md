@@ -1,0 +1,3 @@
+@AGENTS.md
+
+Canonical kickoff: [DEVELOPMENT_HANDOFF.md](DEVELOPMENT_HANDOFF.md).

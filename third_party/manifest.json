@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "purpose": "Unmodified read-only upstream source snapshots for editorial reference; not installed or executed.",
+  "fetched_at_utc": "2026-09-28T16:22:21+00:00",
+  "repositories": [
+    {
+      "repository": "petergyang/no-ai-slop",
+      "repository_url": "https://github.com/petergyang/no-ai-slop",
+      "revision": "000650b156983f5159695b441477f4e63b25dc85",
+      "commit_url": "https://github.com/petergyang/no-ai-slop/commit/000650b156983f5159695b441477f4e63b25dc85",
+      "commit_committed_at_utc": "2026-09-02T04:19:00Z",
+      "default_branch": "main",
+      "default_branch_head_at_fetch": "000650b156983f5159695b441477f4e63b25dc85",
+      "was_default_branch_head_at_fetch": true,
+      "tree_sha": "782e26a87b532a2859e7ee515deac6afdcb11612",
+      "snapshot_dir": "no-ai-slop",
+      "license": {
+        "github_detected_spdx_id": "MIT",
+        "file": "LICENSE",
+        "license_text_verified": "MIT License",
+        "copyright_notice": "Copyright (c) 2026 Peter Yang",
+        "notice_requirement": "Retain the upstream copyright and permission notice in copies or substantial portions."
+      },
+      "files": [
+        {
+          "source_path": "LICENSE",
+          "snapshot_path": "no-ai-slop/LICENSE",
+          "source_url": "https://github.com/petergyang/no-ai-slop/blob/000650b156983f5159695b441477f4e63b25dc85/LICENSE",
+          "raw_url": "https://raw.githubusercontent.com/petergyang/no-ai-slop/000650b156983f5159695b441477f4e63b25dc85/LICENSE",
+          "size_bytes": 1067,
+          "git_blob_sha1": "644ebee1944d0e7d03c66a25977ff0a8a8e1c7ae",
+          "sha256": "b7a7fe370cc4c9e974528c7cea7841cf8ac886bc9ed947edb11b289441fba4a8",
+          "git_blob_verified": true
+        },
+        {
+          "source_path": "README.md",
+          "snapshot_path": "no-ai-slop/README.md",
+          "source_url": "https://github.com/petergyang/no-ai-slop/blob/000650b156983f5159695b441477f4e63b25dc85/README.md",
+          "raw_url": "https://raw.githubusercontent.com/petergyang/no-ai-slop/000650b156983f5159695b441477f4e63b25dc85/README.md",
+          "size_bytes": 3248,
+          "git_blob_sha1": "82f8b7af7e02918077afb447f8fc83c2d33483ba",
+          "sha256": "a2e24837d6531c2e827876123d05ea482a21bcfc25358dbdacbf581fb1e51d81",
+          "git_blob_verified": true
+        },
+        {
+          "source_path": "skills/no-ai-slop/SKILL.md",
+          "snapshot_path": "no-ai-slop/skills/no-ai-slop/SKILL.md",
+          "source_url": "https://github.com/petergyang/no-ai-slop/blob/000650b156983f5159695b441477f4e63b25dc85/skills/no-ai-slop/SKILL.md",
+          "raw_url": "https://raw.githubusercontent.com/petergyang/no-ai-slop/000650b156983f5159695b441477f4e63b25dc85/skills/no-ai-slop/SKILL.md",
+          "size_bytes": 10853,
+          "git_blob_sha1": "e2008aa08d688846b0373b83d7c3d33b85eaabdd",
+          "sha256": "992b365f51a2f62cf4c1c5ed22049a9ee551dfea677550c1a72b371c0ceadd62",
+          "git_blob_verified": true
+        },
+        {
+          "source_path": "skills/no-ai-slop/eval.md",
+          "snapshot_path": "no-ai-slop/skills/no-ai-slop/eval.md",
+          "source_url": "https://github.com/petergyang/no-ai-slop/blob/000650b156983f5159695b441477f4e63b25dc85/skills/no-ai-slop/eval.md",
+          "raw_url": "https://raw.githubusercontent.com/petergyang/no-ai-slop/000650b156983f5159695b441477f4e63b25dc85/skills/no-ai-slop/eval.md",
+          "size_bytes": 3214,
+          "git_blob_sha1": "e912b3e9246ded24b14116682c23702a4d083dc7",
+          "sha256": "8ad8d83ed1abe7fc054ad74966bfca64fc182bc71f59d701b24b962c39d11ad7",
+          "git_blob_verified": true
+        }
+      ],
+      "fetched_at_utc": "2026-09-28T16:22:21+00:00",
+      "source_bytes_preserved": true,
+      "editorial_references": [
+        {
+          "path": "skills/no-ai-slop/eval.md",
+          "included": true,
+          "role": "Self-review checklist explicitly referenced by SKILL.md"
+        }
+      ],
+      "declared_skill_version": null
+    },
+    {
+      "repository": "blader/humanizer",
+      "repository_url": "https://github.com/blader/humanizer",
+      "revision": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+      "commit_url": "https://github.com/blader/humanizer/commit/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+      "commit_committed_at_utc": "2026-09-28T05:54:38Z",
+      "default_branch": "main",
+      "default_branch_head_at_fetch": "225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8",
+      "was_default_branch_head_at_fetch": true,
+      "tree_sha": "8ed37b6d1d98a0bbdb599d0399a4a2185eb8fa03",
+      "snapshot_dir": "humanizer",
+      "license": {
+        "github_detected_spdx_id": "MIT",
+        "file": "LICENSE",
+        "license_text_verified": "MIT License",
+        "copyright_notice": "Copyright (c) 2025 Siqi Chen",
+        "notice_requirement": "Retain the upstream copyright and permission notice in copies or substantial portions."
+      },
+      "files": [
+        {
+          "source_path": "LICENSE",
+          "snapshot_path": "humanizer/LICENSE",
+          "source_url": "https://github.com/blader/humanizer/blob/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/LICENSE",
+          "raw_url": "https://raw.githubusercontent.com/blader/humanizer/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/LICENSE",
+          "size_bytes": 1066,
+          "git_blob_sha1": "625297fb778f32eb39d3a5b97e3e3b611b7304d6",
+          "sha256": "4ac4810254ab36d45419141aeb8e69bf50652cfafe5b2dab947d06d44e5cbf96",
+          "git_blob_verified": true
+        },
+        {
+          "source_path": "README.md",
+          "snapshot_path": "humanizer/README.md",
+          "source_url": "https://github.com/blader/humanizer/blob/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/README.md",
+          "raw_url": "https://raw.githubusercontent.com/blader/humanizer/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/README.md",
+          "size_bytes": 12884,
+          "git_blob_sha1": "22594fa2688ebb53dde0a54719a943721d31e9a7",
+          "sha256": "a07a054f230dca1e3d25e32ba6c808905b743cc6fa56bf8b6868cee0b12a0432",
+          "git_blob_verified": true
+        },
+        {
+          "source_path": "SKILL.md",
+          "snapshot_path": "humanizer/SKILL.md",
+          "source_url": "https://github.com/blader/humanizer/blob/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/SKILL.md",
+          "raw_url": "https://raw.githubusercontent.com/blader/humanizer/225a6f39ac85f76ee48dbad772ea4abe4ed6c9d8/SKILL.md",
+          "size_bytes": 32348,
+          "git_blob_sha1": "19fc634208e8cc6ae55d4ff287152583216fd244",
+          "sha256": "0612f1dfb1672b0ea9b97e139bf1f06cabe98d8b27424fe8ff01e1fb4cc99cad",
+          "git_blob_verified": true
+        }
+      ],
+      "fetched_at_utc": "2026-09-28T16:22:21+00:00",
+      "source_bytes_preserved": true,
+      "editorial_references": [
+        {
+          "url": "https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing",
+          "included": false,
+          "role": "Upstream credited source; link remains in unchanged source. No external page text bundled."
+        }
+      ],
+      "declared_skill_version": "3.1.0"
+    }
+  ],
+  "source_snapshot_permissions": "0444 (read-only files); metadata documents remain editable"
+}

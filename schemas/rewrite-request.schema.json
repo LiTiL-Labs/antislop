@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Anti-slop editorial request 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.2"
+    },
+    "prompt_version": {
+      "const": "0.2"
+    },
+    "selected_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "selection_kind": {
+      "enum": [
+        "prose",
+        "code",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "nearby_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 1500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "boundary": {
+              "enum": [
+                "known_excerpt",
+                "document_boundary",
+                "unavailable"
+              ]
+            }
+          },
+          "required": [
+            "text",
+            "boundary"
+          ]
+        },
+        "after": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 1500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "boundary": {
+              "enum": [
+                "known_excerpt",
+                "document_boundary",
+                "unavailable"
+              ]
+            }
+          },
+          "required": [
+            "text",
+            "boundary"
+          ]
+        }
+      },
+      "required": [
+        "before",
+        "after"
+      ]
+    },
+    "source_hint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "app_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document_title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_type_hint": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "app_name",
+        "document_title",
+        "content_type_hint"
+      ]
+    },
+    "user_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "simplify_wording": {
+          "type": "boolean"
+        },
+        "keep_my_tone": {
+          "type": "boolean"
+        },
+        "avoid_em_dashes": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "simplify_wording",
+        "keep_my_tone",
+        "avoid_em_dashes"
+      ]
+    },
+    "custom_writer_instructions": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 4000
+    },
+    "style_guide": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            }
+          },
+          "required": [
+            "label",
+            "text"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "style_profile_id": {
+      "enum": [
+        "none",
+        "no-ai-slop",
+        "humanizer"
+      ]
+    },
+    "profile_revision": {
+      "enum": [
+        "0.2",
+        "none"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "prompt_version",
+    "selected_text",
+    "selection_kind",
+    "nearby_context",
+    "source_hint",
+    "user_settings",
+    "custom_writer_instructions",
+    "style_guide",
+    "style_profile_id",
+    "profile_revision"
+  ]
+}

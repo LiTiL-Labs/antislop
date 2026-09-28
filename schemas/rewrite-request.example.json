@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.2",
+  "prompt_version": "0.2",
+  "selected_text": "It is worth noting that the pilot may reduce review time for some teams.",
+  "selection_kind": "prose",
+  "nearby_context": {
+    "before": {
+      "text": null,
+      "boundary": "unavailable"
+    },
+    "after": {
+      "text": null,
+      "boundary": "unavailable"
+    }
+  },
+  "source_hint": {
+    "app_name": null,
+    "document_title": null,
+    "content_type_hint": "project update"
+  },
+  "user_settings": {
+    "simplify_wording": false,
+    "keep_my_tone": true,
+    "avoid_em_dashes": false
+  },
+  "custom_writer_instructions": "Keep the tone measured.",
+  "style_guide": null,
+  "style_profile_id": "no-ai-slop",
+  "profile_revision": "0.2"
+}
