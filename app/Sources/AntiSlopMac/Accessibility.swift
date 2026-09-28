@@ -386,6 +386,7 @@ enum KeyboardEvents {
             let units = Array(String(ch).utf16)
             for down in [true, false] {
                 guard let e = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down) else { continue }
+                e.flags = [] // never inherit a modifier (⌘H would hide the app instead of typing "h")
                 e.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
                 e.post(tap: .cghidEventTap)
             }
