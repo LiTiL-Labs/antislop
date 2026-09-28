@@ -106,7 +106,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle("AI connection")
             SegmentedChoice(options: ProviderID.allCases.map { ($0, $0.displayName) },
-                            selection: Binding(get: { model.draft.providerID }, set: { model.draft.providerID = $0 }))
+                            selection: Binding(get: { model.draft.providerID }, set: {
+                                model.providerChosenByUser = true
+                                model.draft.providerID = $0
+                            }))
             let provider = model.draft.providerID
             let state = model.state(for: provider)
             VStack(alignment: .leading, spacing: 10) {

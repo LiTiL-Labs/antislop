@@ -66,7 +66,8 @@ jobs:
           for f in shots/*.png; do
             [ -f "$f" ] || continue
             name="$(basename "${f%.png}")"
-            size=640; [ "$name" = "screen-ready" ] && size=900; [ "$name" = "settings" ] && size=700
+            size=640; [ "$name" = "screen-ready" ] && size=900
+            case "$name" in *settings*) size=620 ;; esac
             sips -s format jpeg -s formatOptions 50 -Z "$size" "$f" --out "shots-small/$name.jpg" >/dev/null
           done
           ls -la shots-small || true
@@ -103,12 +104,24 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        image: [panel-processing, panel-ready, settings, screen-ready]
+        image: [app-panel-generating, app-panel-ready, app-settings, screen-ready]
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: macos-evidence
           path: evidence
+      - name: Image statistics
+        continue-on-error: true
+        run: |
+          pip install -q pillow >/dev/null 2>&1 || true
+          python3 - <<'PY'
+          import glob
+          from PIL import Image, ImageStat
+          for f in sorted(glob.glob("evidence/shots-small/*.jpg")):
+              im = Image.open(f).convert("RGB")
+              colors = len(set(im.resize((160, 120)).getdata()))
+              print(f, im.size, "stddev", [round(x, 1) for x in ImageStat.Stat(im).stddev], "distinct colors (160x120):", colors)
+          PY
       - name: Print ${{ matrix.image }}
         run: |
           f="evidence/shots-small/${{ matrix.image }}.jpg"

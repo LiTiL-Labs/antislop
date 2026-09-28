@@ -202,6 +202,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             panel.model.reset()
             panel.model.update(from: coordinator.session)
             panel.show(anchor: coordinator.snapshot?.selectionBounds)
+            DevSnapshot.write(panel.window, name: "app-panel-generating.png", after: 0.3)
         case .focusExisting:
             panel.focus()
         case .refused(let r):
@@ -222,6 +223,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     func sessionChanged() {
         guard let s = coordinator.session else { return }
         panel.model.update(from: s)
+        switch s.phase {
+        case .ready: DevSnapshot.write(panel.window, name: "app-panel-ready.png")
+        case .targetChanged, .failed: DevSnapshot.write(panel.window, name: "app-panel-error.png")
+        default: break
+        }
         if s.phase == .succeeded {
             closePanel(returnFocus: true)
         }
@@ -259,8 +265,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         if coordinator.session?.phase == .applying { return }
         coordinator.cancel()
         let app = sourceApp
+        let closing = coordinator.session
         panel.hide { [weak self] in
-            self?.coordinator.clear()
+            guard let self else { return }
+            // A new trigger during the fade owns the coordinator now; leave it alone.
+            if self.coordinator.session === closing { self.coordinator.clear() }
             if returnFocus { app?.activate(options: []) }
         }
     }
@@ -300,6 +309,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         settingsWindow = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        DevSnapshot.write(window, name: "app-settings.png", after: 1.2)
 
         accessTimer?.invalidate()
         accessTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -311,6 +321,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         for p in ProviderID.allCases where readiness[p] == nil {
             checkReadiness(p)
         }
+        preselectProviderIfFirstLaunch()
     }
 
     /// Done: validate registration, save atomically, then adopt. A failed key
@@ -346,8 +357,18 @@ final class AppController: NSObject, NSApplicationDelegate {
             let state = await provider.checkReadiness()
             self.readiness[p] = state
             self.settingsModel?.readiness[p] = state
+            self.preselectProviderIfFirstLaunch()
             self.log.info("readiness \(p.rawValue, privacy: .public): \(state.label, privacy: .public)")
         }
+    }
+
+    /// First launch: preselect the only ready runtime; with both or neither
+    /// ready, the visible choice stays as shown. Never overrides the user's pick.
+    func preselectProviderIfFirstLaunch() {
+        guard firstLaunch, let model = settingsModel, !model.providerChosenByUser,
+              ProviderID.allCases.allSatisfy({ readiness[$0] != nil && readiness[$0] != .checking }) else { return }
+        let ready = Set(ProviderID.allCases.filter { readiness[$0]?.isReady == true })
+        model.draft.providerID = AppSettings.firstLaunchProvider(ready: ready)
     }
 
     func signIn(_ p: ProviderID) {

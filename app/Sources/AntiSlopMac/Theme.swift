@@ -112,4 +112,26 @@ struct IconButton: View {
         .accessibilityLabel(label)
     }
 }
+
+/// Developer/CI only: when ANTISLOP_SNAPSHOT_DIR is set, Anti-slop renders its
+/// own windows to PNG at key states (an app can always draw its own views; no
+/// screen-recording permission is involved). Never set this with private text.
+enum DevSnapshot {
+    static let directory = ProcessInfo.processInfo.environment["ANTISLOP_SNAPSHOT_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+
+    @MainActor
+    static func write(_ window: NSWindow?, name: String, after delay: TimeInterval = 0.45) {
+        guard let directory, let window else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let view = window.contentView, window.isVisible else { return }
+            let bounds = view.bounds
+            guard let rep = view.bitmapImageRepForCachingDisplay(in: bounds) else { return }
+            view.cacheDisplay(in: bounds, to: rep)
+            guard let data = rep.representation(using: .png, properties: [:]) else { return }
+            try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+            try? data.write(to: URL(fileURLWithPath: directory).appendingPathComponent(name))
+        }
+    }
+}
 #endif

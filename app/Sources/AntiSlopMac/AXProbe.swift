@@ -252,6 +252,7 @@ public enum AXProbe {
         proc.executableURL = exe
         var env = ProcessInfo.processInfo.environment
         env["ANTISLOP_SETTINGS_PATH"] = settingsURL.path
+        if let shots, liveProvider == nil { env["ANTISLOP_SNAPSHOT_DIR"] = shots }
         if liveProvider == nil {
             env["ANTISLOP_FIXTURE_PROVIDER"] = "1"
         } else {

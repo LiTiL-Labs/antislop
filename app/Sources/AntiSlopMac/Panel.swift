@@ -445,6 +445,9 @@ final class PanelController {
     private var panel: FloatingPanel?
     private var hosting: NSHostingView<PanelView>?
     private(set) var placement: PlacementResult?
+    /// Incremented on every show, so a hide animation that finishes after a new
+    /// show never hides the new panel.
+    private var showGeneration = 0
 
     var isVisible: Bool { panel?.isVisible ?? false }
     var window: NSWindow? { panel }
@@ -466,6 +469,7 @@ final class PanelController {
     }
 
     func show(anchor: PanelRect?) {
+        showGeneration += 1
         let p = ensurePanel()
         let size = hosting?.fittingSize ?? NSSize(width: Theme.panelWidth, height: 320)
         let frames = NSScreen.screens.map { s -> PanelRect in
@@ -510,11 +514,13 @@ final class PanelController {
 
     func hide(completion: (() -> Void)? = nil) {
         guard let p = panel, p.isVisible else { completion?(); return }
+        let generation = showGeneration
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = Theme.reduceMotion ? 0.08 : 0.12
             p.animator().alphaValue = 0
         }, completionHandler: {
-            onMainAsync {
+            onMainAsync { [weak self] in
+                guard let self, self.showGeneration == generation else { return }
                 p.orderOut(nil)
                 p.alphaValue = 1
                 completion?()

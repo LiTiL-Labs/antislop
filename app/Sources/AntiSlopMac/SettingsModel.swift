@@ -22,6 +22,8 @@ final class SettingsModel: ObservableObject {
     @Published var moreOptions = false
     @Published var errors: [String] = []
     @Published var notice: String?
+    /// Set once the user picks a connection; automatic preselection stops then.
+    var providerChosenByUser = false
     let isFirstLaunch: Bool
 
     var onDone: (AppSettings) -> String? = { _ in nil }
