@@ -137,7 +137,7 @@ public final class AccessibilityCapture: SelectionCapturing {
         let rangeCF = AX.range(el, "AXSelectedTextRange")
         let value = AX.string(el, "AXValue")
         var selected = AX.string(el, "AXSelectedText")
-        let range = rangeCF.map { TextRange(location: $0.location, length: $0.length) }
+        let range = rangeCF.map { UTF16Range(location: $0.location, length: $0.length) }
         if selected == nil, let value, let range {
             selected = ContextBuilder.split(value, at: range)?.selection
         }
@@ -218,7 +218,7 @@ public final class AccessibilityCapture: SelectionCapturing {
         guard alive else {
             return TargetObservation(appIsRunning: true, isSameElement: false, isFocusedInApp: false, evidence: nil)
         }
-        let range = AX.range(el, "AXSelectedTextRange").map { TextRange(location: $0.location, length: $0.length) }
+        let range = AX.range(el, "AXSelectedTextRange").map { UTF16Range(location: $0.location, length: $0.length) }
         let value = AX.string(el, "AXValue")
         let evidence = TargetEvidence(
             processID: handle.pid,

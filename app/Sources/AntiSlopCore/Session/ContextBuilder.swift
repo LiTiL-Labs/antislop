@@ -1,7 +1,7 @@
 import Foundation
 
 /// A UTF-16 range, the unit macOS accessibility uses for text ranges.
-public struct TextRange: Equatable, Hashable, Sendable {
+public struct UTF16Range: Equatable, Hashable, Sendable {
     public var location: Int
     public var length: Int
     public init(location: Int, length: Int) {
@@ -69,7 +69,7 @@ public enum ContextBuilder {
     public static func build(
         selectedText: String,
         fullText: String?,
-        selectedRange: TextRange?,
+        selectedRange: UTF16Range?,
         fullTextIsComplete: Bool,
         sourceHint: SourceHint
     ) -> Result<CapturedText, CaptureRefusal> {
@@ -95,7 +95,7 @@ public enum ContextBuilder {
     }
 
     /// Split text around a UTF-16 range; nil if out of bounds or not on scalar boundaries.
-    public static func split(_ text: String, at range: TextRange) -> (before: String, selection: String, after: String)? {
+    public static func split(_ text: String, at range: UTF16Range) -> (before: String, selection: String, after: String)? {
         let u = text.utf16
         guard range.location >= 0, range.length >= 0, range.end <= u.count else { return nil }
         let s = u.index(u.startIndex, offsetBy: range.location)

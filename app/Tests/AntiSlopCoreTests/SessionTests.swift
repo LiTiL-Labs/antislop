@@ -297,7 +297,7 @@ final class ReplacementPlannerTests: XCTestCase {
         let r = (full as NSString).range(of: "It is worth noting that the pilot may reduce errors.")
         return TargetEvidence(processID: 7, bundleID: "com.apple.TextEdit", role: "AXTextArea", isEditable: true,
                               selectedText: "It is worth noting that the pilot may reduce errors.",
-                              selectedRange: TextRange(location: r.location, length: r.length), fullText: full)
+                              selectedRange: UTF16Range(location: r.location, length: r.length), fullText: full)
     }
 
     func obs(_ e: TargetEvidence?, running: Bool = true, same: Bool = true, focused: Bool = true) -> TargetObservation {
@@ -314,7 +314,7 @@ final class ReplacementPlannerTests: XCTestCase {
         XCTAssertEqual(ReplacementPlanner.check(original: original, now: obs(original, same: false)), .elementGone)
         XCTAssertEqual(ReplacementPlanner.check(original: original, now: obs(original, focused: false)), .focusMoved)
         var moved = original
-        moved.selectedRange = TextRange(location: 0, length: 6)
+        moved.selectedRange = UTF16Range(location: 0, length: 6)
         XCTAssertEqual(ReplacementPlanner.check(original: original, now: obs(moved)), .selectionChanged)
         var edited = original
         edited.fullText = full.replacingOccurrences(of: "Outro.", with: "Outro!")

@@ -26,6 +26,8 @@ jobs:
     defaults:
       run:
         working-directory: app
+        # Explicit bash enables pipefail, so `| tee` cannot hide a failing step.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +57,19 @@ jobs:
         run: |
           BIN="$(swift build -c release --show-bin-path)"
           "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --screenshot e2e.png
+
+      - name: Print screenshots into the log
+        if: always()
+        continue-on-error: true
+        run: |
+          # Compressed copies, so the evidence can be read from the job log.
+          for f in e2e.png e2e-after.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 55 -Z 1400 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "BEGIN_IMAGE ${f%.png}.jpg"
+            base64 -i "${f%.png}.jpg" | fold -w 2000
+            echo "END_IMAGE"
+          done
 
       - name: Upload evidence
         if: always()

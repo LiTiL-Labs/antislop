@@ -10,12 +10,12 @@ public struct TargetEvidence: Equatable, Sendable {
     /// nil when the platform cannot tell.
     public var isEditable: Bool?
     public var selectedText: String?
-    public var selectedRange: TextRange?
+    public var selectedRange: UTF16Range?
     /// Full control value, held in memory only for drift checks and verification.
     public var fullText: String?
 
     public init(processID: Int32, bundleID: String? = nil, role: String? = nil, isSecure: Bool = false,
-                isEditable: Bool? = nil, selectedText: String? = nil, selectedRange: TextRange? = nil,
+                isEditable: Bool? = nil, selectedText: String? = nil, selectedRange: UTF16Range? = nil,
                 fullText: String? = nil) {
         self.processID = processID
         self.bundleID = bundleID

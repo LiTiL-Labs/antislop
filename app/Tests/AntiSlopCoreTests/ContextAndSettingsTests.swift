@@ -2,16 +2,16 @@ import XCTest
 @testable import AntiSlopCore
 
 final class ContextBuilderTests: XCTestCase {
-    func range(_ full: String, _ sel: String) -> TextRange {
+    func range(_ full: String, _ sel: String) -> UTF16Range {
         let ns = full as NSString
         let r = ns.range(of: sel)
-        return TextRange(location: r.location, length: r.length)
+        return UTF16Range(location: r.location, length: r.length)
     }
 
     /// A14 / fixture partial_whitespace: exact selection and grammatical join.
     func testPartialSelectionKeepsBoundaryWhitespaceAndJoin() throws {
         let full = "The change may reduce errors."
-        let r = TextRange(location: 10, length: 12) // " may reduce "
+        let r = UTF16Range(location: 10, length: 12) // " may reduce "
         let c = try ContextBuilder.build(selectedText: " may reduce ", fullText: full, selectedRange: r,
                                          fullTextIsComplete: true, sourceHint: .none).get()
         XCTAssertEqual(c.selectedText, " may reduce ")
@@ -22,7 +22,7 @@ final class ContextBuilderTests: XCTestCase {
     /// A13: a confirmed document edge differs from an unavailable one.
     func testDocumentBoundaryOnlyWhenValueIsComplete() throws {
         let full = "Whole text."
-        let r = TextRange(location: 0, length: 11)
+        let r = UTF16Range(location: 0, length: 11)
         let complete = try ContextBuilder.build(selectedText: full, fullText: full, selectedRange: r,
                                                 fullTextIsComplete: true, sourceHint: .none).get()
         XCTAssertEqual(complete.context.before, .documentBoundary)
@@ -38,7 +38,7 @@ final class ContextBuilderTests: XCTestCase {
 
     func testMismatchedRangeFallsBackToSelectionOnly() throws {
         let c = try ContextBuilder.build(selectedText: "alpha", fullText: "beta alpha gamma",
-                                         selectedRange: TextRange(location: 0, length: 5),
+                                         selectedRange: UTF16Range(location: 0, length: 5),
                                          fullTextIsComplete: true, sourceHint: .none).get()
         XCTAssertEqual(c.context, .unavailable)
         XCTAssertEqual(c.selectedText, "alpha")
@@ -76,9 +76,9 @@ final class ContextBuilderTests: XCTestCase {
 
     func testSplitRejectsRangesInsideSurrogatePairs() {
         let s = "a🚀b" // rocket is two UTF-16 units
-        XCTAssertNil(ContextBuilder.split(s, at: TextRange(location: 2, length: 1)))
-        XCTAssertEqual(ContextBuilder.split(s, at: TextRange(location: 1, length: 2))?.selection, "🚀")
-        XCTAssertNil(ContextBuilder.split(s, at: TextRange(location: 3, length: 5)))
+        XCTAssertNil(ContextBuilder.split(s, at: UTF16Range(location: 2, length: 1)))
+        XCTAssertEqual(ContextBuilder.split(s, at: UTF16Range(location: 1, length: 2))?.selection, "🚀")
+        XCTAssertNil(ContextBuilder.split(s, at: UTF16Range(location: 3, length: 5)))
     }
 
     func testTentativeClassification() {
