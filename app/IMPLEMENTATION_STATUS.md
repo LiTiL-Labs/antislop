@@ -22,7 +22,7 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 | 1 — first runnable vertical slice | Built; proven in parts | Mac-CI + Fixture: hotkey → capture → panel → ⌘Return → verified replacement, Escape cancel, drift blocking. Live-Claude: real schema-valid rewrites. **Not yet in one flow on a Mac with a live provider**; `antislop-axprobe e2e --live` is that check. |
 | 2 — both providers and full settings | Code complete; Codex live blocked | Both adapters implemented and tested against fake runtimes. Codex flags were validated against the real codex-cli 0.158.0 (`--strict-config`), but it could not make a live request here. All settings persist atomically (Auto). |
 | 3 — context, fidelity, resilience | Done for Claude | Bounded context, unknown boundaries, partial selections, revisions, stale-result discard, clipboard ownership, drift checks (Auto, Mac-CI). Corpus: 54/54 validated and 0 material fidelity violations in agent review ([review](evidence/claude-code-corpus-review.md)). Codex corpus not run. |
-| 4 — visual polish and local acceptance | Implemented; human review pending | Warm shell, material, placement, slide/fade, Reduce Motion/Transparency handling. CI screenshots are the only visual evidence so far. Motion, VoiceOver and multi-display need a human. |
+| 4 — visual polish and local acceptance | Implemented; human review pending | Warm shell, material, placement, slide/fade, Reduce Motion/Transparency handling. Real screenshots from the macOS runner were checked by OCR and color sampling ([evidence](evidence/macos-ci.md#rendered-ui-vision-ocr-and-sampled-colors-of-real-screenshots)). Motion, VoiceOver and multi-display need a human. |
 
 ## Provider findings
 

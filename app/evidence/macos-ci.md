@@ -44,4 +44,16 @@ These runs use synthetic text only. The full-app checks use the labelled **fixtu
 | e2e_panel_closes_after_apply | PASS | the panel dismissed after confirmed replacement |
 | e2e_settings_without_key | PASS | with no key assigned, launch opened the settings screen |
 
+## Rendered UI (Vision OCR and sampled colors of real screenshots)
+
+The app renders its own windows when `ANTISLOP_SNAPSHOT_DIR` is set (developer/CI only), and `screencapture` also captures the panel window. `scripts/inspect-shots.swift` OCRs each image and samples colors. Run 6:
+
+| Surface | Text found (top to bottom) | Colors sampled |
+|---|---|---|
+| Panel, generating (430×340 pt) | "Anti-slop", close ✕, spinner "Rewriting…", "⌘ Return to apply", "Anti-slop" button | shell #F8F7F5 (token #F7F6F3 over material), editor #FFFEFF, button #CDCDC9 (disabled) |
+| Panel, ready (430×317 pt) | "Anti-slop", "Fixture: looks like plain te…" plus the "Fixture preview — not live AI" badge, the draft, the fixture note, "⌘ Return to apply", "Anti-slop" button | shell #F8F7F5, editor #FFFEFF, button #292928 (enabled, near-black) |
+| Settings (540×644 pt, top of scroll) | "Settings", "Keyboard shortcut", "Not set", "Assign anti-slop key", "Choose any supported key or combination.", "AI connection", "Codex" / "Claude Code", "Claude account • Fixture only (not live)", "Manage", the data-flow line, "Style guidance", "No AI Slop" / "Humanizer" / "None", "Light, proportional edits. Recommended.", "Simplify wording", "Keep my tone", "More writing options" | white |
+
+Finding: in the self-rendered ready panel, OCR read only the end of the draft ("…luce errors for some teams"), positioned left of the editor inset. The editor now uses the standard scrolling-text-view setup, and new drafts start scrolled to the beginning. See run 7 or later for the re-check.
+
 Not covered here: live providers (no credentials are placed in CI), VoiceOver, motion quality, multiple displays, first-run permission prompts, and real-user keyboard layouts.
