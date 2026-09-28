@@ -267,7 +267,9 @@ public enum AXProbe {
         try? await Task.sleep(nanoseconds: 2_500_000_000)
         record("e2e_launch", proc.isRunning, "Anti-slop pid \(proc.processIdentifier)")
 
-        guard let (app, el) = await openDocument(named: "anti-slop-e2e.txt", text: original) else {
+        // A fresh document per run, so a previous run's edited window is never reused.
+        let docName = "anti-slop-e2e-\(UUID().uuidString.prefix(8)).txt"
+        guard let (app, el) = await openDocument(named: docName, text: original) else {
             record("e2e_textedit", false, "TextEdit document did not become focused")
             return
         }

@@ -58,6 +58,21 @@ jobs:
           BIN="$(swift build -c release --show-bin-path)"
           "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --shots shots
 
+      - name: Live-mode end to end against stub runtimes (not live AI)
+        continue-on-error: true
+        run: |
+          # Stub CLIs where the app's runtime discovery looks first. This exercises the
+          # real provider code path in the real app; it is not a live provider test.
+          mkdir -p "$HOME/.local/bin"
+          cp scripts/ci/fake-claude "$HOME/.local/bin/claude"
+          cp scripts/ci/fake-codex "$HOME/.local/bin/codex"
+          chmod +x "$HOME/.local/bin/claude" "$HOME/.local/bin/codex"
+          BIN="$(swift build -c release --show-bin-path)"
+          pkill -x TextEdit || true; sleep 2
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider claude-code --force --out probe-stub-claude.json
+          pkill -x TextEdit || true; sleep 2
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider codex --force --out probe-stub-codex.json
+
       - name: Inspect screenshots (OCR and colors)
         if: always()
         continue-on-error: true
@@ -98,7 +113,7 @@ jobs:
           grep -E "Executed [0-9]+ tests|error:|failed" test.log | tail -8 || true
           echo "=== screenshot inspection ==="
           [ -f inspect.log ] && cat inspect.log || echo "no inspection"
-          for f in probe-textedit.json probe-e2e.json; do
+          for f in probe-textedit.json probe-e2e.json probe-stub-claude.json probe-stub-codex.json; do
             echo "=== $f ==="
             [ -f "$f" ] && python3 -c "import json,sys; d=json.load(open('$f')); print(d['macOS']); [print(('PASS' if c['passed'] else 'FAIL'), c['id'], '-', c['detail']) for c in d['checks']]" || echo missing
           done

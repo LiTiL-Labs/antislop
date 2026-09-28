@@ -1,0 +1,35 @@
+#!/bin/sh
+# CI STUB, not Claude Code: mimics the documented CLI surface Anti-slop uses so the
+# real app's provider path can be exercised on a macOS runner without credentials.
+case "$1" in
+  --version) echo "0.0.0-stub (Claude Code stub)"; exit 0 ;;
+  --help) cat <<'HELP'
+Usage: claude [options] [command] [prompt]
+Options:
+  --json-schema <schema>  x
+  --tools <tools...>  x
+  --no-session-persistence  x
+  --strict-mcp-config  x
+  --system-prompt <prompt>  x
+  --output-format <format>  x
+  -p, --print  x
+  --safe-mode  x
+  --setting-sources <sources>  x
+  --settings <file-or-json>  x
+  --disable-slash-commands  x
+  --permission-prompts <target>  x
+Commands:
+  auth  Manage authentication
+HELP
+    exit 0 ;;
+  auth) echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0 ;;
+esac
+IN="$(cat)"
+echo '{"type":"system","subtype":"init","tools":["StructuredOutput"],"mcp_servers":[],"apiKeySource":"none","model":"stub-model"}'
+sleep 1
+case "$IN" in
+  *"Return ok as true"*) OUT='{"ok":true}' ;;
+  *) OUT='{"intent":"Looks like a short update","rewritten_text":"The pilot may reduce errors for some teams (stub).","note":null}' ;;
+esac
+echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"StructuredOutput","input":{}}]}}'
+echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"structured_output\":$OUT}"

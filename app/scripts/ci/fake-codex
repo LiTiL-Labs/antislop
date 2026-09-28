@@ -1,0 +1,23 @@
+#!/bin/sh
+# CI STUB, not Codex: mimics the documented `codex exec` surface Anti-slop uses.
+case "$1" in
+  --version) echo "codex-cli 0.0.0-stub"; exit 0 ;;
+  login) echo "Logged in using ChatGPT" >&2; exit 0 ;;
+  features) printf 'hooks                stable             true\nshell_tool           stable             true\n'; exit 0 ;;
+esac
+if [ "$1" = exec ] && [ "$2" = --help ]; then
+  echo "--json --ephemeral --skip-git-repo-check --output-schema <F> --output-last-message <F> --sandbox <M> --cd <D> --ignore-user-config --ignore-rules --strict-config --color <C>"
+  exit 0
+fi
+IN="$(cat)"
+LAST=""; PREV=""
+for a in "$@"; do [ "$PREV" = --output-last-message ] && LAST="$a"; PREV="$a"; done
+echo '{"type":"thread.started","thread_id":"stub"}'
+sleep 1
+case "$IN" in
+  *"Return ok as true"*) OUT='{"ok":true}' ;;
+  *) OUT='{"intent":"Looks like a short update","rewritten_text":"The pilot may reduce errors for some teams (codex stub).","note":null}' ;;
+esac
+echo '{"type":"item.completed","item":{"id":"m","type":"agent_message","text":"x"}}'
+printf '%s' "$OUT" > "$LAST"
+echo '{"type":"turn.completed","usage":{}}'
