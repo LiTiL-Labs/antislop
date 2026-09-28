@@ -164,6 +164,26 @@ final class CoordinatorTests: XCTestCase {
         XCTAssertEqual(c.session?.phase, .succeeded)
     }
 
+    /// After a confirmed apply the app closes its panel from inside onChange, and closing
+    /// cancels. That must not re-notify forever: it overflowed the stack and ended the app
+    /// right after every successful replacement (found by the macOS single-key probe).
+    func testCancelFromOnChangeAfterSuccessTerminates() async {
+        let fixture = FixtureProvider(delay: 0.01)
+        let (c, _, rep) = make(fixture)
+        _ = c.trigger()
+        await waitFor(c) { $0 == .ready }
+        var notifications = 0
+        c.onChange = { [unowned c] in
+            notifications += 1
+            guard notifications < 50 else { return } // a regression fails here instead of crashing
+            if c.session?.phase == .succeeded { c.cancel() }
+        }
+        await c.apply()
+        XCTAssertEqual(rep.writes.count, 1)
+        XCTAssertEqual(c.session?.phase, .succeeded)
+        XCTAssertLessThan(notifications, 5, "cancelling a finished session must not notify again")
+    }
+
     /// A27: duplicate trigger focuses the existing panel; close cancels without mutation.
     func testDuplicateTriggerAndCancel() async {
         let fixture = FixtureProvider(behavior: .hang)

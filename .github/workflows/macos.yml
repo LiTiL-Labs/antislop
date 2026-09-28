@@ -78,7 +78,10 @@ jobs:
       - name: App lifecycle log (no text content)
         if: always()
         continue-on-error: true
-        run: log show --last 15m --style compact --predicate 'subsystem == "local.antislop"' 2>/dev/null | tail -150 || true
+        run: |
+          log show --last 15m --style compact --predicate 'subsystem == "local.antislop"' 2>/dev/null | tail -150 || true
+          echo "=== Anti-slop crash reports ==="
+          ls -1 "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | grep -i antislop || echo "none"
 
       - name: Inspect screenshots (OCR and colors)
         if: always()

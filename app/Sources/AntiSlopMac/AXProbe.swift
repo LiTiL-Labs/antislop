@@ -337,7 +337,9 @@ public enum AXProbe {
         }
         record("e2e_apply_replaces_selection", applied, applied ? "fixture draft replaced only the selection" : "document not replaced")
         try? await Task.sleep(nanoseconds: 500_000_000)
-        record("e2e_panel_closes_after_apply", !(await isPanelVisible(pid: proc.processIdentifier)), "panel dismissed after confirmed replacement")
+        let closedAfterApply = !(await isPanelVisible(pid: proc.processIdentifier))
+        record("e2e_panel_closes_after_apply", closedAfterApply && proc.isRunning,
+               "panel dismissed after confirmed replacement: \(closedAfterApply); app still running: \(proc.isRunning)")
 
         // A01/A02: with no key assigned, launch opens the same settings screen.
         proc.terminate()
@@ -514,7 +516,9 @@ public enum AXProbe {
         let settled = AX.string(el, "AXValue")
         record("edited_draft_applied_once", final == expectedDoc && settled == expectedDoc,
                final == expectedDoc ? "document now holds the edited draft exactly once" : "document: \(settled.debugDescription)")
-        record("panel_closes_after_edited_apply", !(await isPanelVisible(pid: pid)), "panel dismissed after confirmed replacement")
+        let closedAfterEdit = !(await isPanelVisible(pid: pid))
+        record("panel_closes_after_edited_apply", closedAfterEdit && proc.isRunning,
+               "panel dismissed after confirmed replacement: \(closedAfterEdit); app still running: \(proc.isRunning)")
 
         // A06: with Anti-slop inactive again, the key is registered again.
         await waitFrontmost(app)
@@ -670,6 +674,11 @@ public enum AXProbe {
         let ok = final.hasPrefix(head) && final.hasSuffix(tail) && middle == proposal
         record("live_apply_replaces_selection", ok,
                ok ? "only the selection changed; it now reads: \(middle)" : "unexpected document: \(final)")
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        let closed = !(await isPanelVisible(pid: appPID))
+        let alive = kill(appPID, 0) == 0
+        record("live_panel_closes_app_keeps_running", closed && alive,
+               "panel dismissed: \(closed); Anti-slop still running: \(alive)")
     }
 
     /// The panel's draft editor text, read through Accessibility.

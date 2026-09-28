@@ -180,8 +180,12 @@ public final class SessionCoordinator {
     public func cancel() {
         work?.cancel()
         work = nil
+        let before = session?.phase
         session?.cancel()
-        onChange?()
+        // Notify only on a real change. Cancelling a finished session is a no-op, and a
+        // listener that cancels from inside onChange (the app closing its panel after a
+        // confirmed apply) must not re-notify itself without end.
+        if session?.phase != before { onChange?() }
     }
 
     /// Forget a finished session (after the panel closes).

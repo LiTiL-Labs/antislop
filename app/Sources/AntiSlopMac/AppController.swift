@@ -273,7 +273,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Dismiss after confirmed replacement or explicit close. Close cancels pending work.
     func closePanel(returnFocus: Bool) {
         if coordinator.session?.phase == .applying { return }
-        coordinator.cancel()
+        // Only work still in flight needs cancelling; a finished session is left as is.
+        if coordinator.isActive { coordinator.cancel() }
         let app = sourceApp
         let closing = coordinator.session
         panel.hide { [weak self] in
