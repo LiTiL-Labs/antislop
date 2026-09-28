@@ -10,7 +10,9 @@ import ApplicationServices
 /// process that runs it.
 ///
 ///   antislop-axprobe textedit [--out report.json] [--allow-quit-textedit] [--force]
-///   antislop-axprobe e2e --app build/Anti-slop.app [--out report.json] [--screenshot shot.png]
+///   antislop-axprobe e2e --app build/Anti-slop.app [--out report.json] [--shots dir]
+///   antislop-axprobe e2e --app build/Anti-slop.app --live --provider claude-code|codex
+///     (live: the real app and your signed-in provider; synthetic TextEdit text only)
 @MainActor
 public enum AXProbe {
     struct Check: Codable {
@@ -49,7 +51,15 @@ public enum AXProbe {
         switch mode {
         case "e2e":
             guard let app = value("--app") else { print("--app <path to Anti-slop.app> required"); return 2 }
-            await endToEnd(appPath: app, screenshot: value("--screenshot"))
+            if args.contains("--live") {
+                guard let p = value("--provider").flatMap(ProviderID.init(rawValue:)) else {
+                    print("--live needs --provider claude-code or --provider codex")
+                    return 2
+                }
+                await endToEnd(appPath: app, shots: value("--shots"), liveProvider: p)
+            } else {
+                await endToEnd(appPath: app, shots: value("--shots"), liveProvider: nil)
+            }
         default:
             await textEditChecks(allowQuit: args.contains("--allow-quit-textedit"))
         }
@@ -225,18 +235,28 @@ public enum AXProbe {
 
     // MARK: Full app, fixture provider
 
-    static func endToEnd(appPath: String, screenshot: String?) async {
+    static func endToEnd(appPath: String, shots: String?, liveProvider: ProviderID?) async {
+        if let shots { try? FileManager.default.createDirectory(atPath: shots, withIntermediateDirectories: true) }
+        func shot(_ name: String, window: Bool = true, pid: pid_t) {
+            guard let shots else { return }
+            let path = (shots as NSString).appendingPathComponent(name)
+            if window, let id = frontWindowID(pid: pid) { capture(path, windowID: id) } else { capture(path, windowID: nil) }
+        }
         let settingsURL = FileManager.default.temporaryDirectory.appendingPathComponent("anti-slop-e2e-settings.json")
         // ⌃⌥⌘J: a combination with no default system meaning.
         let shortcut = ShortcutBinding(keyCode: 0x26, displayLabel: "⌃⌥⌘J", modifiers: [.control, .option, .command])
-        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: .claudeCode, shortcut: shortcut,
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: liveProvider ?? .claudeCode, shortcut: shortcut,
                                                                    customWriterInstructions: "Keep it measured."))
         let exe = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/MacOS/AntiSlop")
         let proc = Process()
         proc.executableURL = exe
         var env = ProcessInfo.processInfo.environment
         env["ANTISLOP_SETTINGS_PATH"] = settingsURL.path
-        env["ANTISLOP_FIXTURE_PROVIDER"] = "1"
+        if liveProvider == nil {
+            env["ANTISLOP_FIXTURE_PROVIDER"] = "1"
+        } else {
+            env.removeValue(forKey: "ANTISLOP_FIXTURE_PROVIDER")
+        }
         proc.environment = env
         do { try proc.run() } catch {
             record("e2e_launch", false, "could not launch \(exe.path)")
@@ -258,8 +278,15 @@ public enum AXProbe {
         KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand])
         let appeared = await waitForWindow(pid: proc.processIdentifier)
         record("e2e_panel_appears", appeared, appeared ? "panel window visible" : "no panel window")
+        if liveProvider == nil {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            shot("panel-processing.png", pid: proc.processIdentifier)
+        }
         try? await Task.sleep(nanoseconds: 1_800_000_000)
-        if let screenshot { capture(screenshot) }
+        if liveProvider == nil {
+            shot("panel-ready.png", pid: proc.processIdentifier)
+            shot("screen-ready.png", window: false, pid: proc.processIdentifier)
+        }
         KeyboardEvents.postChord(keyCode: 0x35, flags: [])
         try? await Task.sleep(nanoseconds: 800_000_000)
         record("e2e_escape_no_change", AX.string(el, "AXValue") == original, "document unchanged after Escape")
@@ -270,6 +297,11 @@ public enum AXProbe {
         try? await Task.sleep(nanoseconds: 300_000_000)
         KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand])
         _ = await waitForWindow(pid: proc.processIdentifier)
+        if let live = liveProvider {
+            await liveApply(appPID: proc.processIdentifier, textEdit: el, provider: live,
+                            shoot: { name in shot(name, pid: proc.processIdentifier) })
+            return
+        }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         KeyboardEvents.postChord(keyCode: 0x24, flags: [.maskCommand])
         var applied = false
@@ -279,26 +311,108 @@ public enum AXProbe {
             if AX.string(el, "AXValue") == expected { applied = true; break }
         }
         record("e2e_apply_replaces_selection", applied, applied ? "fixture draft replaced only the selection" : "document not replaced")
-        if let screenshot {
-            capture(screenshot.replacingOccurrences(of: ".png", with: "-after.png"))
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        record("e2e_panel_closes_after_apply", !(await isPanelVisible(pid: proc.processIdentifier)), "panel dismissed after confirmed replacement")
+
+        // A01/A02: with no key assigned, launch opens the same settings screen.
+        proc.terminate()
+        proc.waitUntilExit()
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: .claudeCode))
+        let again = Process()
+        again.executableURL = exe
+        again.environment = env
+        if (try? again.run()) != nil {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            let settingsShown = frontWindowID(pid: again.processIdentifier, normalLayer: true) != nil
+            record("e2e_settings_without_key", settingsShown, "settings window opened on launch with no key assigned")
+            if let shots, let id = frontWindowID(pid: again.processIdentifier, normalLayer: true) {
+                capture((shots as NSString).appendingPathComponent("settings.png"), windowID: id)
+            }
+            again.terminate()
         }
+    }
+
+    static func windows(pid: pid_t) -> [[String: Any]] {
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        return list.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }
+    }
+
+    static func frontWindowID(pid: pid_t, normalLayer: Bool = false) -> CGWindowID? {
+        let match = windows(pid: pid).first { w in
+            let layer = (w[kCGWindowLayer as String] as? Int) ?? 0
+            return normalLayer ? layer == 0 : layer > 0 && layer < 20
+        }
+        return (match?[kCGWindowNumber as String] as? NSNumber).map { CGWindowID($0.uint32Value) }
+    }
+
+    static func isPanelVisible(pid: pid_t) async -> Bool {
+        frontWindowID(pid: pid) != nil
+    }
+
+    /// Live provider: wait for a real proposal in the panel's editor, apply it,
+    /// and verify that only the selected sentence changed.
+    static func liveApply(appPID: pid_t, textEdit el: AXUIElement, provider: ProviderID, shoot: (String) -> Void) async {
+        var proposal: String? = nil
+        for _ in 0..<(Int(Limits.rewriteTimeout) * 2 + 20) {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let text = panelEditorText(pid: appPID), !text.isEmpty { proposal = text; break }
+        }
+        guard let proposal else {
+            record("live_proposal", false, "no proposal appeared in the panel (check the \(provider.displayName) connection in settings)")
+            return
+        }
+        record("live_proposal", true, "\(provider.displayName) proposal: \(proposal)")
+        shoot("live-panel-ready.png")
+        KeyboardEvents.postChord(keyCode: 0x24, flags: [.maskCommand])
+        let head = "Intro sentence stays. ", tail = " Closing sentence stays.\n"
+        var final: String? = nil
+        for _ in 0..<60 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if let v = AX.string(el, "AXValue"), v != original { final = v; break }
+        }
+        guard let final else {
+            record("live_apply_replaces_selection", false, "document unchanged after apply")
+            return
+        }
+        let middle = String(final.dropFirst(head.count).dropLast(tail.count))
+        let ok = final.hasPrefix(head) && final.hasSuffix(tail) && middle == proposal
+        record("live_apply_replaces_selection", ok,
+               ok ? "only the selection changed; it now reads: \(middle)" : "unexpected document: \(final)")
+    }
+
+    /// The panel's draft editor text, read through Accessibility.
+    static func panelEditorText(pid: pid_t) -> String? {
+        let app = AXUIElementCreateApplication(pid)
+        guard let windows = AX.value(app, "AXWindows") as? [AXUIElement] else { return nil }
+        for w in windows {
+            if let text = findTextArea(w, depth: 0) { return text }
+        }
+        return nil
+    }
+
+    static func findTextArea(_ el: AXUIElement, depth: Int) -> String? {
+        if depth > 12 { return nil }
+        if AX.string(el, "AXRole") == "AXTextArea", let v = AX.string(el, "AXValue") { return v }
+        guard let children = AX.value(el, "AXChildren") as? [AXUIElement] else { return nil }
+        for c in children {
+            if let v = findTextArea(c, depth: depth + 1) { return v }
+        }
+        return nil
     }
 
     static func waitForWindow(pid: pid_t) async -> Bool {
         for _ in 0..<50 {
             try? await Task.sleep(nanoseconds: 100_000_000)
-            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
-            if list.contains(where: { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && (($0[kCGWindowLayer as String] as? Int) ?? 0) > 0 }) {
-                return true
-            }
+            if frontWindowID(pid: pid) != nil { return true }
         }
         return false
     }
 
-    static func capture(_ path: String) {
+    /// Screenshot of one window (with its shadow) or the whole screen.
+    static func capture(_ path: String, windowID: CGWindowID?) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        p.arguments = ["-x", path]
+        p.arguments = windowID.map { ["-x", "-l", String($0), path] } ?? ["-x", path]
         try? p.run()
         p.waitUntilExit()
         print("screenshot \(path) exit \(p.terminationStatus)")

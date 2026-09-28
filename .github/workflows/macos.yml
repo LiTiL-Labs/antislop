@@ -56,20 +56,20 @@ jobs:
         continue-on-error: true
         run: |
           BIN="$(swift build -c release --show-bin-path)"
-          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --screenshot e2e.png
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --shots shots
 
-      - name: Print screenshots into the log
+      - name: Compress screenshots
         if: always()
         continue-on-error: true
         run: |
-          # Compressed copies, so the evidence can be read from the job log.
-          for f in e2e.png e2e-after.png; do
+          mkdir -p shots-small
+          for f in shots/*.png; do
             [ -f "$f" ] || continue
-            sips -s format jpeg -s formatOptions 55 -Z 1400 "$f" --out "${f%.png}.jpg" >/dev/null
-            echo "BEGIN_IMAGE ${f%.png}.jpg"
-            base64 -i "${f%.png}.jpg" | fold -w 2000
-            echo "END_IMAGE"
+            name="$(basename "${f%.png}")"
+            size=640; [ "$name" = "screen-ready" ] && size=900; [ "$name" = "settings" ] && size=700
+            sips -s format jpeg -s formatOptions 50 -Z "$size" "$f" --out "shots-small/$name.jpg" >/dev/null
           done
+          ls -la shots-small || true
 
       - name: Upload evidence
         if: always()
@@ -80,5 +80,36 @@ jobs:
             app/build.log
             app/test.log
             app/probe-*.json
-            app/*.png
+            app/shots/*.png
+            app/shots-small/*.jpg
           if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== unit tests ==="
+          grep -E "Executed [0-9]+ tests|error:|failed" test.log | tail -8 || true
+          for f in probe-textedit.json probe-e2e.json; do
+            echo "=== $f ==="
+            [ -f "$f" ] && python3 -c "import json,sys; d=json.load(open('$f')); print(d['macOS']); [print(('PASS' if c['passed'] else 'FAIL'), c['id'], '-', c['detail']) for c in d['checks']]" || echo missing
+          done
+
+  # Screenshots are printed one per job (base64 JPEG) so each can be read from
+  # its own job log; artifact downloads are not reachable from the dev container.
+  screenshot-log:
+    needs: build-and-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        image: [panel-processing, panel-ready, settings, screen-ready]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-evidence
+          path: evidence
+      - name: Print ${{ matrix.image }}
+        run: |
+          f="evidence/shots-small/${{ matrix.image }}.jpg"
+          if [ -f "$f" ]; then echo "BEGIN_IMAGE"; base64 -w 0 "$f"; echo; echo "END_IMAGE"; else echo "no $f"; fi
