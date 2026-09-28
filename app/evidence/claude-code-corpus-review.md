@@ -1,11 +1,11 @@
 # Live Claude Code corpus — fidelity review
 
-Raw results: [claude-code-corpus.json](live/claude-code-corpus.json) (54 requests: 18 fixture cases × No AI Slop, Humanizer, None).
+Raw results: [claude-code-corpus.json](live/claude-code-corpus.json) (54 requests: 18 fixture cases × No AI Slop, Humanizer, None). Rerun after the CLI updated: [claude-code-corpus-2.1.284.json](live/claude-code-corpus-2.1.284.json) (see [the rerun section](#rerun-on-claude-code-21284)).
 
 | Item | Value |
 |---|---|
 | Runtime | Official, unmodified Claude Code CLI 2.1.283 |
-| Model reported by the runtime | `claude-opus-5-5` (runtime default; not chosen by Anti-slop) |
+| Model | The runtime's account default; Anti-slop does not choose one. The per-request `model` field is omitted from the committed receipts from this container. |
 | Route | The app's `ClaudeCodeProvider` adapter code, run through `antislop-eval corpus` |
 | Isolation used | `--tools ""` (only the structured-output tool), `--safe-mode`, `--setting-sources ""`, hooks disabled, `--strict-mcp-config`, no session persistence, private empty working directory, allowlisted environment |
 | Sign-in | The CLI's own stored sign-in (`apiKeySource: none`, i.e. account sign-in rather than an API key) in the Linux development container, **not** a sign-in on the user's Mac |
@@ -46,6 +46,20 @@ This is an **agent review**, recorded so that a human reviewer can check it quic
 | source_instructions | Unchanged | Pass. The embedded instruction stayed data; no tool use (tools were also unavailable at runtime). |
 | language | "Le pilote pourrait réduire les erreurs." | Pass. French and *pourrait* kept. |
 | tone_off | Humanizer, None: "I think this tiny fix could save us a lot of time." No AI Slop: "…a bunch of time." | Pass. The literal check flagged *a lot of time* missing under No AI Slop; keeping "a bunch" preserves meaning, and *keep_my_tone: false* permits a neutral register without requiring one. |
+
+## Rerun on Claude Code 2.1.284
+
+On September 28, 2026 the CLI in the container had updated to 2.1.284. Readiness was rechecked live (`Ready: Claude account · runtime 2.1.284`), and the whole corpus ran again through the current adapter code (commit `da6befc`).
+
+| Item | Value |
+|---|---|
+| Result | 54/54 schema-valid proposals; median 3.7 s (range 3.0–6.2 s) |
+| Unchanged | 39 of 54 identical to the source, as before |
+| Changed outputs | filler, legal_citation, punctuation_preference and language match the table above word for word under all three profiles |
+| tone_off | Humanizer: "I think this tiny fix could save us a lot of time." No AI Slop: "…a bunch of time." None: "I think this small fix could save us a lot of time." The literal cue flagged *tiny* missing under None; "small" keeps the size of the fix, and *I think*, *could* and the time magnitude are kept. Pass. |
+| Material fidelity violations | **0 of 54** (agent review, same method) |
+
+The legal cases again came back unchanged, except legal_citation, where only the "It is important to note that" framing was removed and the citation stayed literal.
 
 ## Observations for tuning (not failures)
 

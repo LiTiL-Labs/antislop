@@ -12,7 +12,7 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 | **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle ([results](evidence/macos-ci.md)) |
 | **Fixture** | The development `FixtureProvider`, clearly labelled in the UI. It is never a live connection. |
 | **Stub-CI** | The real app on the macOS runner calling labelled stub `claude`/`codex` scripts through its real provider path ([results](evidence/macos-ci.md#full-app-live-mode-with-stub-runtimes-e2e---live-not-live-ai)). It proves the plumbing, not a live AI connection. |
-| **Live-Claude** | The official Claude Code CLI 2.1.283 driven by the app's adapter code, from the Linux container, using the CLI's own stored account sign-in |
+| **Live-Claude** | The official Claude Code CLI (2.1.283, and 2.1.284 on a full rerun) driven by the app's adapter code, from the Linux container, using the CLI's own stored account sign-in |
 | **Not run / Human** | Needs the user's Mac, sign-in or judgment |
 
 ## Slices
@@ -22,7 +22,7 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 | 0 — project and constraints | Done | SwiftPM package in `app/` (SwiftUI + AppKit, as recommended). The deployment target is macOS 13, the smallest target that covers the SwiftUI APIs used (`scrollContentBackground`, switch tint). Provider CLIs inspected; findings below. Handoff files are unchanged (`SHA256SUMS` verifies). |
 | 1 — first runnable vertical slice | Built; proven in parts | Mac-CI + Fixture: hotkey → capture → panel → ⌘Return → verified replacement, Escape cancel, drift blocking. Live-Claude: real schema-valid rewrites. Stub-CI: the same loop through each provider adapter in the real app. **Not yet in one flow on a Mac with a live provider**; `scripts/mac-acceptance.sh` runs that check. |
 | 2 — both providers and full settings | Code complete; Codex live blocked | Both adapters implemented and tested against fake runtimes, and both ran end to end inside the real app with stub runtimes (Stub-CI). Codex flags were validated against the real codex-cli 0.158.0 (`--strict-config`), but it could not make a live request here. All settings persist atomically (Auto). |
-| 3 — context, fidelity, resilience | Done for Claude | Bounded context, unknown boundaries, partial selections, revisions, stale-result discard, clipboard ownership, drift checks (Auto, Mac-CI). Corpus: 54/54 validated and 0 material fidelity violations in agent review ([review](evidence/claude-code-corpus-review.md)). Codex corpus not run. |
+| 3 — context, fidelity, resilience | Done for Claude | Bounded context, unknown boundaries, partial selections, revisions, stale-result discard, clipboard ownership, drift checks (Auto, Mac-CI). Corpus: 54/54 validated and 0 material fidelity violations in agent review, on CLI 2.1.283 and again on 2.1.284 ([review](evidence/claude-code-corpus-review.md)). Codex corpus not run. |
 | 4 — visual polish and local acceptance | Implemented; human review pending | Warm shell, material, placement, slide/fade, Reduce Motion/Transparency handling. Real screenshots from the macOS runner were checked by OCR and color sampling ([evidence](evidence/macos-ci.md#rendered-ui-vision-ocr-and-sampled-colors-of-real-screenshots)). Motion, VoiceOver and multi-display need a human. |
 
 ## Provider findings
