@@ -64,7 +64,14 @@ public final class RewriteSession {
 
     public var hasDraft: Bool { proposal != nil }
     public var intentLine: String? { proposal.map { Self.singleLine($0.intent, limit: Limits.intent) } }
-    public var note: String? { proposal?.note.map { Self.singleLine($0, limit: Limits.note) } }
+    /// Display note. Placeholder strings some models emit instead of null
+    /// (observed live: "None") are not shown.
+    public var note: String? {
+        guard let raw = proposal?.note else { return nil }
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ["none", "null", "n/a", "nil", ""].contains(t.lowercased()) { return nil }
+        return Self.singleLine(t, limit: Limits.note)
+    }
     public var isUnchangedProposal: Bool { proposal?.rewrittenText == capture.selectedText }
 
     /// Start (or explicitly retry) generation. Allowed only before any user edit.

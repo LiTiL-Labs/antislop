@@ -1,0 +1,69 @@
+# Compile and check Anti-slop on a real macOS runner. The development
+# container is Linux, so this is the only place the AppKit layer is compiled
+# and the Accessibility probe can touch a real TextEdit window.
+name: macOS build and checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/anti-slop-macos-dev-ay9m4k]
+    paths:
+      - "app/**"
+      - "prompts/**"
+      - "fixtures/**"
+      - "schemas/**"
+      - "third_party/**"
+      - ".github/workflows/macos.yml"
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-check:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build (release)
+        run: swift build -c release 2>&1 | tee build.log
+
+      - name: Unit tests
+        run: swift test 2>&1 | tee test.log
+
+      - name: Assemble app bundle
+        run: ./scripts/build-app.sh
+
+      - name: Accessibility probe against TextEdit
+        continue-on-error: true
+        run: |
+          BIN="$(swift build -c release --show-bin-path)"
+          "$BIN/antislop-axprobe" textedit --allow-quit-textedit --force --out probe-textedit.json
+
+      - name: End-to-end with fixture provider
+        continue-on-error: true
+        run: |
+          BIN="$(swift build -c release --show-bin-path)"
+          "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --screenshot e2e.png
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-evidence
+          path: |
+            app/build.log
+            app/test.log
+            app/probe-*.json
+            app/*.png
+          if-no-files-found: warn

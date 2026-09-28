@@ -159,6 +159,23 @@ public final class SessionCoordinator {
         onChange?()
     }
 
+    /// After the original selection changed, explicitly adopt the user's current
+    /// selection as the target for the existing draft ("Use current selection").
+    /// Never regenerates and never applies; the user still presses Anti-slop.
+    @discardableResult
+    public func retarget() -> CaptureRefusal? {
+        guard let s = session, case .targetChanged = s.phase else { return nil }
+        switch capturer.captureFocusedSelection() {
+        case .failure(let r):
+            return r
+        case .success(let snap):
+            snapshot = snap
+            s.returnToReadyAfterTargetChange()
+            onChange?()
+            return nil
+        }
+    }
+
     /// Close/Escape: cancel pending work, never mutate the source.
     public func cancel() {
         work?.cancel()

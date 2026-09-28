@@ -8,6 +8,8 @@ final class EmbeddedPromptsTests: XCTestCase {
         XCTAssertEqual(EmbeddedPrompts.primary, try Repo.text("prompts/primary.md"))
         XCTAssertEqual(EmbeddedPrompts.noAISlop, try Repo.text("prompts/profiles/no-ai-slop.md"))
         XCTAssertEqual(EmbeddedPrompts.humanizer, try Repo.text("prompts/profiles/humanizer.md"))
+        XCTAssertEqual(EmbeddedPrompts.noAISlopLicense, try Repo.text("third_party/no-ai-slop/LICENSE"))
+        XCTAssertEqual(EmbeddedPrompts.humanizerLicense, try Repo.text("third_party/humanizer/LICENSE"))
     }
 
     func testLibraryExtractsInstructionAndRuleBodiesOnly() throws {

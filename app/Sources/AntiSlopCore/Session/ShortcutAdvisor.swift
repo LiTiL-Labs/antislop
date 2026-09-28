@@ -24,6 +24,25 @@ public struct SystemHotKey: Equatable, Sendable {
 
     public var name: String { SystemHotKey.names[id] ?? "a macOS keyboard shortcut" }
 
+    /// Factory-default system shortcuts that com.apple.symbolichotkeys omits until changed.
+    public static let macOSDefaults: [SystemHotKey] = [
+        SystemHotKey(id: 64, keyCode: 0x31, modifiers: [.command]),                    // Spotlight
+        SystemHotKey(id: 65, keyCode: 0x31, modifiers: [.command, .option]),           // Finder search
+        SystemHotKey(id: 60, keyCode: 0x31, modifiers: [.control]),                    // Previous input source
+        SystemHotKey(id: 61, keyCode: 0x31, modifiers: [.control, .option]),           // Next input source
+        SystemHotKey(id: 28, keyCode: 0x14, modifiers: [.command, .shift]),            // Screenshot
+        SystemHotKey(id: 29, keyCode: 0x14, modifiers: [.command, .shift, .control]),
+        SystemHotKey(id: 30, keyCode: 0x15, modifiers: [.command, .shift]),            // Area screenshot
+        SystemHotKey(id: 31, keyCode: 0x15, modifiers: [.command, .shift, .control]),
+        SystemHotKey(id: 184, keyCode: 0x17, modifiers: [.command, .shift]),           // Screenshot options
+        SystemHotKey(id: 32, keyCode: KeyCodes.up, modifiers: [.control]),             // Mission Control
+        SystemHotKey(id: 33, keyCode: KeyCodes.down, modifiers: [.control]),           // App windows
+        SystemHotKey(id: 79, keyCode: KeyCodes.left, modifiers: [.control]),           // Space left
+        SystemHotKey(id: 81, keyCode: KeyCodes.right, modifiers: [.control]),          // Space right
+        SystemHotKey(id: 27, keyCode: 0x32, modifiers: [.command]),                    // Next window
+        SystemHotKey(id: 98, keyCode: 0x2C, modifiers: [.command, .shift]),            // Help menu
+    ]
+
     static let names: [Int: String] = [
         7: "Move focus to the menu bar", 8: "Move focus to the Dock", 9: "Move focus to the active window",
         10: "Move focus to the window toolbar", 11: "Move focus to the floating window",

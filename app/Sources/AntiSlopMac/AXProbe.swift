@@ -1,0 +1,315 @@
+#if os(macOS)
+import AntiSlopCore
+import AppKit
+import ApplicationServices
+
+/// Real-app check of capture and replacement against TextEdit (the documented
+/// baseline: an AppKit NSTextView in a plain-text document). It uses the same
+/// AccessibilityCapture/AccessibilityReplacer code as the app. Synthetic text
+/// only; prints a JSON report. Requires Accessibility permission for the
+/// process that runs it.
+///
+///   antislop-axprobe textedit [--out report.json] [--allow-quit-textedit] [--force]
+///   antislop-axprobe e2e --app build/Anti-slop.app [--out report.json] [--screenshot shot.png]
+@MainActor
+public enum AXProbe {
+    struct Check: Codable {
+        let id: String
+        let passed: Bool
+        let detail: String
+    }
+
+    static var checks: [Check] = []
+
+    static func record(_ id: String, _ passed: Bool, _ detail: String) {
+        checks.append(Check(id: id, passed: passed, detail: detail))
+        print("\(passed ? "PASS" : "FAIL") \(id): \(detail)")
+    }
+
+    static let original = "Intro sentence stays. It is worth noting that the pilot may reduce errors for some teams. Closing sentence stays.\n"
+    static let target = "It is worth noting that the pilot may reduce errors for some teams."
+    static let replacement = "The pilot may reduce errors for some teams."
+
+    public static func run(_ args: [String]) async -> Int32 {
+        let mode = args.dropFirst().first ?? "textedit"
+        func value(_ flag: String) -> String? {
+            guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+            return args[i + 1]
+        }
+        let out = value("--out")
+        let trusted = AX.trusted(prompt: false)
+        record("accessibility_trusted", trusted, trusted ? "process is trusted" : "grant Accessibility to the process running the probe")
+        guard trusted else { return finish(out, code: 3) }
+
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit")
+        if !running.isEmpty && !args.contains("--force") {
+            print("TextEdit is already running. Quit it (saving your documents) or pass --force.")
+            return finish(out, code: 4)
+        }
+        switch mode {
+        case "e2e":
+            guard let app = value("--app") else { print("--app <path to Anti-slop.app> required"); return 2 }
+            await endToEnd(appPath: app, screenshot: value("--screenshot"))
+        default:
+            await textEditChecks(allowQuit: args.contains("--allow-quit-textedit"))
+        }
+        let failed = checks.contains { !$0.passed }
+        return finish(out, code: failed ? 1 : 0)
+    }
+
+    static func finish(_ out: String?, code: Int32) -> Int32 {
+        struct Report: Codable {
+            let macOS: String
+            let generatedAt: String
+            let baseline: String
+            let checks: [Check]
+        }
+        let report = Report(macOS: ProcessInfo.processInfo.operatingSystemVersionString,
+                            generatedAt: ISO8601DateFormatter().string(from: Date()),
+                            baseline: "TextEdit plain-text document (AppKit NSTextView)", checks: checks)
+        if let out, let data = try? JSONEncoder.pretty.encode(report) {
+            try? data.write(to: URL(fileURLWithPath: out))
+            print("wrote \(out)")
+        }
+        return code
+    }
+
+    // MARK: TextEdit helpers
+
+    static func openDocument(named name: String, text: String) async -> (NSRunningApplication, AXUIElement)? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        try? Data(text.utf8).write(to: url)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        p.arguments = ["-a", "TextEdit", url.path]
+        try? p.run()
+        p.waitUntilExit()
+        for _ in 0..<120 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first else { continue }
+            app.activate(options: [])
+            if let el = AX.focusedElement(ofApp: app.processIdentifier), AX.string(el, "AXValue") == text {
+                return (app, el)
+            }
+        }
+        return nil
+    }
+
+    static func select(_ el: AXUIElement, _ substring: String, in text: String) -> CFRange {
+        let r = (text as NSString).range(of: substring)
+        let cf = CFRange(location: r.location, length: r.length)
+        _ = AX.setRange(el, "AXSelectedTextRange", cf)
+        return cf
+    }
+
+    static func waitFrontmost(_ app: NSRunningApplication) async {
+        app.activate(options: [])
+        for _ in 0..<40 where NSWorkspace.shared.frontmostApplication?.processIdentifier != app.processIdentifier {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    static func textEditChecks(allowQuit: Bool) async {
+        guard let (app, el) = await openDocument(named: "anti-slop-probe-a.txt", text: original) else {
+            record("open_textedit", false, "TextEdit document did not become focused")
+            return
+        }
+        record("open_textedit", true, "TextEdit pid \(app.processIdentifier), role \(AX.string(el, "AXRole") ?? "?")")
+        let capturer = AccessibilityCapture()
+        let replacer = AccessibilityReplacer()
+
+        // A12: exact selection, bounded context and bounds captured before any focus change.
+        await waitFrontmost(app)
+        _ = select(el, target, in: original)
+        guard case .success(let snap) = capturer.captureFocusedSelection() else {
+            record("capture", false, "capture refused")
+            return
+        }
+        record("capture_exact_selection", snap.captured.selectedText == target, "selected text matched: \(snap.captured.selectedText == target)")
+        record("capture_context", snap.captured.context.before == .excerpt("Intro sentence stays. ")
+               && snap.captured.context.after == .excerpt(" Closing sentence stays.\n"),
+               "before=\(snap.captured.context.before.boundary.rawValue) after=\(snap.captured.context.after.boundary.rawValue)")
+        record("capture_bounds", snap.selectionBounds != nil, snap.selectionBounds.map { "w=\(Int($0.width)) h=\(Int($0.height))" } ?? "no bounds")
+        record("capture_source_hint", snap.captured.sourceHint.appName == "TextEdit",
+               "app=\(snap.captured.sourceHint.appName ?? "nil") title=\(snap.captured.sourceHint.documentTitle ?? "nil") type=\(snap.captured.sourceHint.contentTypeHint ?? "nil")")
+
+        // A30: verified replacement of only the selection.
+        let outcome = await replacer.replace(snap, with: replacement)
+        let expected = original.replacingOccurrences(of: target, with: replacement)
+        let after = AX.string(el, "AXValue")
+        record("replace_confirmed", outcome == .confirmed(.accessibilitySelectedText), "outcome=\(outcome)")
+        record("replace_surroundings_intact", after == expected, "document equals expected: \(after == expected)")
+
+        // A33: native undo after an accessibility write.
+        await waitFrontmost(app)
+        KeyboardEvents.postCommand(KeyboardEvents.zKey, to: nil)
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        let undone = AX.string(el, "AXValue")
+        record("undo_restores_original", undone == original,
+               undone == original ? "Cmd-Z restored the original" : "after Cmd-Z the document \(undone == expected ? "still holds the replacement" : "differs")")
+        if undone != original { _ = AX.set(el, "AXValue", original as CFString) }
+
+        // A29: moved selection blocks the write.
+        await waitFrontmost(app)
+        _ = select(el, target, in: original)
+        if case .success(let s2) = capturer.captureFocusedSelection() {
+            _ = select(el, "Closing sentence", in: original)
+            let o = await replacer.replace(s2, with: replacement)
+            record("drift_selection_blocks", o == .blocked(.selectionChanged) && AX.string(el, "AXValue") == original, "outcome=\(o)")
+        } else { record("drift_selection_blocks", false, "capture failed") }
+
+        // A29: text edited elsewhere in the document blocks the write.
+        _ = select(el, target, in: original)
+        if case .success(let s3) = capturer.captureFocusedSelection() {
+            _ = select(el, "Closing", in: original)
+            _ = AX.set(el, "AXSelectedText", "Final" as CFString)
+            let edited = original.replacingOccurrences(of: "Closing", with: "Final")
+            _ = select(el, target, in: edited)
+            let o = await replacer.replace(s3, with: replacement)
+            record("drift_text_blocks", o == .blocked(.textChanged) && AX.string(el, "AXValue") == edited, "outcome=\(o)")
+            _ = AX.set(el, "AXValue", original as CFString)
+        } else { record("drift_text_blocks", false, "capture failed") }
+
+        // A29: another field gaining focus blocks the write; nothing is pasted there.
+        _ = select(el, target, in: original)
+        if case .success(let s4) = capturer.captureFocusedSelection() {
+            let other = "Unrelated document.\n"
+            if let (_, elB) = await openDocument(named: "anti-slop-probe-b.txt", text: other) {
+                let o = await replacer.replace(s4, with: replacement)
+                let bIntact = AX.string(elB, "AXValue") == other
+                let aIntact = AX.string(el, "AXValue") == original
+                record("drift_focus_blocks", (o == .blocked(.focusMoved) || o == .blocked(.elementGone)) && bIntact && aIntact,
+                       "outcome=\(o) unrelated intact=\(bIntact) original intact=\(aIntact)")
+                if let win = AX.element(elB, "AXWindow") {
+                    AXUIElementPerformAction(win, "AXRaise" as CFString)
+                }
+                if let winA = AX.element(el, "AXWindow") {
+                    AXUIElementPerformAction(winA, "AXRaise" as CFString)
+                    _ = AX.set(winA, "AXMain", kCFBooleanTrue)
+                }
+            } else { record("drift_focus_blocks", false, "second document did not open") }
+        } else { record("drift_focus_blocks", false, "capture failed") }
+
+        // A32 (real clipboard): paste fallback restores the user's clipboard only when still owned.
+        await waitFrontmost(app)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        if let focused = AX.focusedElement(ofApp: app.processIdentifier), CFEqual(focused, el) {
+            _ = select(el, target, in: original)
+            let sentinel = "SENTINEL-\(UUID().uuidString)"
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(sentinel, forType: .string)
+            if case .success(let s5) = capturer.captureFocusedSelection() {
+                let o = await AccessibilityReplacer(method: .pasteboardOnly).replace(s5, with: replacement)
+                let doc = AX.string(el, "AXValue")
+                record("paste_fallback_confirmed", o == .confirmed(.pasteboard) && doc == expected, "outcome=\(o)")
+                record("paste_fallback_restores_clipboard", pb.string(forType: .string) == sentinel,
+                       "clipboard restored: \(pb.string(forType: .string) == sentinel)")
+                _ = AX.set(el, "AXValue", original as CFString)
+            } else { record("paste_fallback_confirmed", false, "capture failed") }
+        } else {
+            record("paste_fallback_confirmed", false, "could not refocus the first document")
+        }
+
+        // A29: the original app closing blocks the write.
+        if allowQuit {
+            _ = select(el, target, in: original)
+            if case .success(let s6) = capturer.captureFocusedSelection() {
+                app.forceTerminate()
+                for _ in 0..<40 where !app.isTerminated { try? await Task.sleep(nanoseconds: 100_000_000) }
+                let o = await replacer.replace(s6, with: replacement)
+                record("app_closed_blocks", o == .blocked(.appClosed), "outcome=\(o)")
+            }
+        }
+    }
+
+    // MARK: Full app, fixture provider
+
+    static func endToEnd(appPath: String, screenshot: String?) async {
+        let settingsURL = FileManager.default.temporaryDirectory.appendingPathComponent("anti-slop-e2e-settings.json")
+        // ⌃⌥⌘J: a combination with no default system meaning.
+        let shortcut = ShortcutBinding(keyCode: 0x26, displayLabel: "⌃⌥⌘J", modifiers: [.control, .option, .command])
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: .claudeCode, shortcut: shortcut,
+                                                                   customWriterInstructions: "Keep it measured."))
+        let exe = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/MacOS/AntiSlop")
+        let proc = Process()
+        proc.executableURL = exe
+        var env = ProcessInfo.processInfo.environment
+        env["ANTISLOP_SETTINGS_PATH"] = settingsURL.path
+        env["ANTISLOP_FIXTURE_PROVIDER"] = "1"
+        proc.environment = env
+        do { try proc.run() } catch {
+            record("e2e_launch", false, "could not launch \(exe.path)")
+            return
+        }
+        defer { proc.terminate() }
+        try? await Task.sleep(nanoseconds: 2_500_000_000)
+        record("e2e_launch", proc.isRunning, "Anti-slop pid \(proc.processIdentifier)")
+
+        guard let (app, el) = await openDocument(named: "anti-slop-e2e.txt", text: original) else {
+            record("e2e_textedit", false, "TextEdit document did not become focused")
+            return
+        }
+        await waitFrontmost(app)
+        _ = select(el, target, in: original)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        // Escape cancels without changing the source (A27).
+        KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand])
+        let appeared = await waitForWindow(pid: proc.processIdentifier)
+        record("e2e_panel_appears", appeared, appeared ? "panel window visible" : "no panel window")
+        try? await Task.sleep(nanoseconds: 1_800_000_000)
+        if let screenshot { capture(screenshot) }
+        KeyboardEvents.postChord(keyCode: 0x35, flags: [])
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        record("e2e_escape_no_change", AX.string(el, "AXValue") == original, "document unchanged after Escape")
+
+        // Trigger again and apply with Command-Return (A28/A30).
+        await waitFrontmost(app)
+        _ = select(el, target, in: original)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand])
+        _ = await waitForWindow(pid: proc.processIdentifier)
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        KeyboardEvents.postChord(keyCode: 0x24, flags: [.maskCommand])
+        var applied = false
+        let expected = original.replacingOccurrences(of: target, with: replacement)
+        for _ in 0..<40 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if AX.string(el, "AXValue") == expected { applied = true; break }
+        }
+        record("e2e_apply_replaces_selection", applied, applied ? "fixture draft replaced only the selection" : "document not replaced")
+        if let screenshot {
+            capture(screenshot.replacingOccurrences(of: ".png", with: "-after.png"))
+        }
+    }
+
+    static func waitForWindow(pid: pid_t) async -> Bool {
+        for _ in 0..<50 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+            if list.contains(where: { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && (($0[kCGWindowLayer as String] as? Int) ?? 0) > 0 }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func capture(_ path: String) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        p.arguments = ["-x", path]
+        try? p.run()
+        p.waitUntilExit()
+        print("screenshot \(path) exit \(p.terminationStatus)")
+    }
+}
+
+extension JSONEncoder {
+    static var pretty: JSONEncoder {
+        let e = JSONEncoder()
+        e.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return e
+    }
+}
+#endif

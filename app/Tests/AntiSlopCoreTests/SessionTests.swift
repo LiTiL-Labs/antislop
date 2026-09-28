@@ -92,6 +92,19 @@ final class RewriteSessionTests: XCTestCase {
         XCTAssertEqual(s.intentLine, "Looks like a note")
         XCTAssertEqual(s.applyAvailability, .enabled)
     }
+
+    func testPlaceholderNotesAreNotDisplayed() {
+        for placeholder in ["None", " null ", "N/A"] {
+            let s = makeSession("Text.")
+            let g = s.beginGeneration()!
+            s.receive(rewrite("Text.", note: placeholder), generation: g)
+            XCTAssertNil(s.note, placeholder)
+        }
+        let s = makeSession("Text.")
+        let g = s.beginGeneration()!
+        s.receive(rewrite("Text.", note: "Kept the defined term."), generation: g)
+        XCTAssertEqual(s.note, "Kept the defined term.")
+    }
 }
 
 // MARK: - Coordinator with deterministic stubs
@@ -237,6 +250,31 @@ final class CoordinatorTests: XCTestCase {
         for l in lines {
             XCTAssertFalse(l.contains("Nightjar") || l.contains("merger") || l.contains("Secret style"), l)
         }
+    }
+
+    /// A29: after drift, nothing is written until the user explicitly adopts a
+    /// new selection and presses Anti-slop again; the draft is untouched.
+    func testTargetChangeThenExplicitRetarget() async {
+        let fixture = FixtureProvider(delay: 0.01)
+        let rep = StubReplacer()
+        rep.outcome = .blocked(.selectionChanged)
+        let cap = StubCapturer(.success(snapshot("It is worth noting that the pilot may reduce errors.")))
+        let (c, _, _) = make(fixture, capturer: cap, replacer: rep)
+        _ = c.trigger()
+        await waitFor(c) { $0 == .ready }
+        c.edit("Edited draft.")
+        await c.apply()
+        XCTAssertEqual(c.session?.phase, .targetChanged(.selectionChanged))
+        XCTAssertEqual(c.session?.draft, "Edited draft.")
+        cap.result = .success(snapshot("A different selection."))
+        XCTAssertNil(c.retarget())
+        XCTAssertEqual(c.snapshot?.captured.selectedText, "A different selection.")
+        XCTAssertEqual(c.session?.phase, .ready)
+        XCTAssertEqual(fixture.requests.count, 1, "no regeneration")
+        rep.outcome = .confirmed(.accessibilitySelectedText)
+        await c.apply()
+        XCTAssertEqual(rep.writes, ["Edited draft.", "Edited draft."])
+        XCTAssertEqual(c.session?.phase, .succeeded)
     }
 
     func testFailedApplyRetainsDraft() async {

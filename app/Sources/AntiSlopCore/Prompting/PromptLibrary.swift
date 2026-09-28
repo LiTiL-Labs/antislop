@@ -60,3 +60,20 @@ public struct PromptLibrary: Sendable {
         return text
     }
 }
+
+/// Attribution for the reviewed profiles' upstream sources (MIT).
+public enum Acknowledgements {
+    public static var text: String {
+        """
+        Anti-slop's two writing styles are reviewed adaptations, not endorsements by their authors.
+
+        No AI Slop by Peter Yang — https://github.com/petergyang/no-ai-slop (revision 000650b1)
+
+        \(EmbeddedPrompts.noAISlopLicense)
+
+        Humanizer by Siqi Chen (blader) — https://github.com/blader/humanizer (revision 225a6f39)
+
+        \(EmbeddedPrompts.humanizerLicense)
+        """
+    }
+}
