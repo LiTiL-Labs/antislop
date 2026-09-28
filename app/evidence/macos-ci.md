@@ -1,6 +1,6 @@
 # macOS runner evidence
 
-Source: the `macOS build and checks` workflow ([`.github/workflows/macos.yml`](../../.github/workflows/macos.yml)) on branch `claude/anti-slop-macos-dev-ay9m4k`, job `build-and-check`. The results below were identical on runs 3, 4, 6 and 7 (latest: run 7, commit `41e369e`).
+Source: the `macOS build and checks` workflow ([`.github/workflows/macos.yml`](../../.github/workflows/macos.yml)) on branch `claude/anti-slop-macos-dev-ay9m4k`, job `build-and-check`. The results below were identical on runs 3, 4, 6, 7 and 10 (latest: run 10, commit `15db632`).
 
 | Item | Value |
 |---|---|
@@ -8,7 +8,7 @@ Source: the `macOS build and checks` workflow ([`.github/workflows/macos.yml`](.
 | macOS | 15.7.9 (24G830) |
 | Toolchain | Xcode 16.4, Apple Swift 6.1.2, target arm64-apple-macosx |
 | Build | `swift build -c release`: every target, including the AppKit/SwiftUI/Accessibility layer, compiles |
-| Unit tests | `swift test`: 80 tests, 0 failures (the same suite also passes on Linux, Swift 6.1.3) |
+| Unit tests | `swift test`: 81 tests, 0 failures (the same suite also passes on Linux, Swift 6.1.3) |
 | Baseline app | TextEdit, plain-text document (AppKit `NSTextView`) |
 
 These runs use synthetic text only. The full-app checks use the labelled **fixture provider**, so they prove the interaction and replacement path, not a live AI connection. The runner grants Accessibility to the probe process, so they do not test the first-run permission prompt either.
@@ -44,6 +44,18 @@ These runs use synthetic text only. The full-app checks use the labelled **fixtu
 | e2e_panel_closes_after_apply | PASS | the panel dismissed after confirmed replacement |
 | e2e_settings_without_key | PASS | with no key assigned, launch opened the settings screen |
 
+## Full app, live mode, with stub runtimes (`e2e --live`): not live AI
+
+This step puts two clearly labelled stub CLIs ([`scripts/ci/fake-claude`](../scripts/ci/fake-claude), [`fake-codex`](../scripts/ci/fake-codex)) in `~/.local/bin`, where the app's runtime discovery looks. The real app then goes through its real provider path: discovery, version and `--help` checks, readiness, the isolated invocation, the stream or event guard, response validation, the panel, and verified replacement. It shows the in-app plumbing for both providers works. It says nothing about live model quality, sign-in or network behavior.
+
+| Check | Claude Code stub | Codex stub |
+|---|---|---|
+| e2e_launch, e2e_panel_appears, e2e_escape_no_change | PASS | PASS |
+| live_proposal | PASS: "The pilot may reduce errors for some teams (stub)." | PASS: "… (codex stub)." |
+| live_apply_replaces_selection | PASS: only the selection changed | PASS: only the selection changed |
+
+Finding and fix: on its first run (run 9, commit `cd96e93`) this step failed because runtime discovery rejected the stub's version string `0.0.0-stub`. The version parser accepted only all-numeric versions, so a real pre-release Claude Code or Codex build (for example `0.160.0-alpha.2`) would also have been reported as incompatible. The parser now keeps semver pre-release and build suffixes, a unit test covers it, and run 10 (commit `15db632`) passed. When no proposal appears, the probe now records the panel's own status text, so a failed live run explains itself.
+
 ## Rendered UI (Vision OCR and sampled colors of real screenshots)
 
 The app renders its own windows when `ANTISLOP_SNAPSHOT_DIR` is set (developer/CI only), and `screencapture` also captures the panel window. `scripts/inspect-shots.swift` OCRs each image and samples colors. Run 6:
@@ -56,4 +68,4 @@ The app renders its own windows when `ANTISLOP_SNAPSHOT_DIR` is set (developer/C
 
 Finding and fix: in run 6, OCR of the self-rendered ready panel read only the end of the draft ("…luce errors for some teams"), positioned left of the editor inset. The editor was changed to the standard scrolling-text-view setup, and new drafts now start scrolled to the beginning. Run 7 (commit `41e369e`) re-checked it: the self-rendered and the window-server (`screencapture -l`) images both read "The pilot may reduce errors for some teams" inside the editor. The run-7 window-server captures also show "Rewriting…" with the disabled button while generating, and the intent, draft, note and enabled button when ready. All 15 TextEdit checks, all 7 end-to-end checks and all 80 unit tests passed again.
 
-Not covered here: live providers (no credentials are placed in CI), VoiceOver, motion quality, multiple displays, first-run permission prompts, and real-user keyboard layouts.
+Not covered here: live providers (no credentials are placed in CI; `scripts/mac-acceptance.sh` runs the same checks against the user's own signed-in runtimes), VoiceOver, motion quality, multiple displays, first-run permission prompts, and real-user keyboard layouts.

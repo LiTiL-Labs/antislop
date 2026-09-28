@@ -2,15 +2,16 @@
 
 Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build and run instructions: [README.md](README.md).
 
-**Bottom line: MVP is not complete.** The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.
+**Bottom line: MVP is not complete.** The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider and, through each real provider adapter, with stub Claude Code and Codex runtimes. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.
 
 ## Evidence types used here
 
 | Label | Meaning |
 |---|---|
-| **Auto** | XCTest suite (80 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
+| **Auto** | XCTest suite (81 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
 | **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle ([results](evidence/macos-ci.md)) |
 | **Fixture** | The development `FixtureProvider`, clearly labelled in the UI. It is never a live connection. |
+| **Stub-CI** | The real app on the macOS runner calling labelled stub `claude`/`codex` scripts through its real provider path ([results](evidence/macos-ci.md#full-app-live-mode-with-stub-runtimes-e2e---live-not-live-ai)). It proves the plumbing, not a live AI connection. |
 | **Live-Claude** | The official Claude Code CLI 2.1.283 driven by the app's adapter code, from the Linux container, using the CLI's own stored account sign-in |
 | **Not run / Human** | Needs the user's Mac, sign-in or judgment |
 
@@ -19,8 +20,8 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 | Slice | State | Evidence and notes |
 |---|---|---|
 | 0 — project and constraints | Done | SwiftPM package in `app/` (SwiftUI + AppKit, as recommended). The deployment target is macOS 13, the smallest target that covers the SwiftUI APIs used (`scrollContentBackground`, switch tint). Provider CLIs inspected; findings below. Handoff files are unchanged (`SHA256SUMS` verifies). |
-| 1 — first runnable vertical slice | Built; proven in parts | Mac-CI + Fixture: hotkey → capture → panel → ⌘Return → verified replacement, Escape cancel, drift blocking. Live-Claude: real schema-valid rewrites. **Not yet in one flow on a Mac with a live provider**; `antislop-axprobe e2e --live` is that check. |
-| 2 — both providers and full settings | Code complete; Codex live blocked | Both adapters implemented and tested against fake runtimes. Codex flags were validated against the real codex-cli 0.158.0 (`--strict-config`), but it could not make a live request here. All settings persist atomically (Auto). |
+| 1 — first runnable vertical slice | Built; proven in parts | Mac-CI + Fixture: hotkey → capture → panel → ⌘Return → verified replacement, Escape cancel, drift blocking. Live-Claude: real schema-valid rewrites. Stub-CI: the same loop through each provider adapter in the real app. **Not yet in one flow on a Mac with a live provider**; `scripts/mac-acceptance.sh` runs that check. |
+| 2 — both providers and full settings | Code complete; Codex live blocked | Both adapters implemented and tested against fake runtimes, and both ran end to end inside the real app with stub runtimes (Stub-CI). Codex flags were validated against the real codex-cli 0.158.0 (`--strict-config`), but it could not make a live request here. All settings persist atomically (Auto). |
 | 3 — context, fidelity, resilience | Done for Claude | Bounded context, unknown boundaries, partial selections, revisions, stale-result discard, clipboard ownership, drift checks (Auto, Mac-CI). Corpus: 54/54 validated and 0 material fidelity violations in agent review ([review](evidence/claude-code-corpus-review.md)). Codex corpus not run. |
 | 4 — visual polish and local acceptance | Implemented; human review pending | Warm shell, material, placement, slide/fade, Reduce Motion/Transparency handling. Real screenshots from the macOS runner were checked by OCR and color sampling ([evidence](evidence/macos-ci.md#rendered-ui-vision-ocr-and-sampled-colors-of-real-screenshots)). Motion, VoiceOver and multi-display need a human. |
 
@@ -66,8 +67,8 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 | A05 | Logic tested | Auto: reserved keys, modifier-only, Fn, and system shortcuts read from `com.apple.symbolichotkeys` plus defaults. Registration errors are reported, never remapped. Real keyboard not run. |
 | A06 | Implemented | Trigger suspended while Anti-slop is active; key repeat gives one activation. Not run live. |
 | A07 | Tested | Auto (save/reload of every field, atomic write, unreadable file preserved). Mac-CI: the app loaded a settings file on launch. |
-| A08 | **Blocked** | Codex live request impossible here (network policy). Fake-runtime tests and real-CLI flag validation only. |
-| A09 | Live outside the app | Live-Claude: readiness and 54 rewrites through the adapter. On-Mac sign-in and in-app rewrite not yet run. |
+| A08 | **Blocked here; ready for the user's Mac** | Codex live request impossible here (network policy). Fake-runtime tests, real-CLI flag validation, and Stub-CI in-app proposal and apply only. |
+| A09 | Live outside the app | Live-Claude: readiness and 54 rewrites through the adapter. Stub-CI: in-app proposal and apply. On-Mac sign-in and live in-app rewrite not yet run. |
 | A10 | Stub + one live case | Auto: signed out, API key, cloud-provider switch, limit, auth error, offline, timeout. Live: real Codex 0.158.0 reported "Sign-in needed" when signed out. |
 | A11 | Logic tested | Auto: empty, whitespace-only, oversized (no truncation). Capture refuses secure fields and non-editable controls; a real secure field was not tested. |
 | A12 | **Passed (Mac-CI)** | Exact selection, known excerpts, bounds and source hint captured from TextEdit. |
