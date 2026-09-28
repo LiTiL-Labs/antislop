@@ -524,8 +524,10 @@ public enum AXProbe {
         KeyboardEvents.postChord(keyCode: grave, flags: [])
         let again = await waitForWindow(pid: pid)
         _ = await waitForEditorText(pid: pid)
-        record("key_triggers_again_after_panel", again && AX.string(el, "AXValue") == now,
-               again ? "` opened the panel again; the document received no character" : "no panel on the second press")
+        let afterPress = AX.string(el, "AXValue") ?? ""
+        record("key_triggers_again_after_panel", again && afterPress == now,
+               again ? "` opened the panel again; the document received no character"
+                     : "no panel on the second press; the key \(afterPress == now ? "was consumed" : "reached TextEdit")")
 
         // A28: an empty editor can't be applied, and typing continues in the editor afterwards.
         KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand)

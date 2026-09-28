@@ -75,6 +75,11 @@ jobs:
           "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --live --provider codex --force --out probe-stub-codex.json || status=1
           exit $status
 
+      - name: App lifecycle log (no text content)
+        if: always()
+        continue-on-error: true
+        run: log show --last 15m --style compact --predicate 'subsystem == "local.antislop"' 2>/dev/null | tail -150 || true
+
       - name: Inspect screenshots (OCR and colors)
         if: always()
         continue-on-error: true

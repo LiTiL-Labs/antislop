@@ -106,13 +106,15 @@ public final class HotKeyManager {
         isDown = false
     }
 
-    public func resume() {
-        guard suspended else { return }
+    /// Re-register the binding after a suspension; returns the registration status (0 when nothing to do).
+    @discardableResult
+    public func resume() -> OSStatus {
+        guard suspended else { return 0 }
         suspended = false
-        if let b = binding {
-            let (status, newRef) = registerRaw(b, id: 1)
-            if status == 0 { ref = newRef }
-        }
+        guard let b = binding else { return 0 }
+        let (status, newRef) = registerRaw(b, id: 1)
+        if status == 0 { ref = newRef }
+        return status
     }
 
     private func unregisterCurrent() {

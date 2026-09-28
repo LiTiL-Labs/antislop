@@ -131,8 +131,14 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     /// While Anti-slop is active its own fields receive the assigned key.
-    @objc func selfBecameActive() { hotKeys.suspend() }
-    @objc func selfResignedActive() { hotKeys.resume() }
+    @objc func selfBecameActive() {
+        hotKeys.suspend()
+        log.notice("active; trigger suspended")
+    }
+    @objc func selfResignedActive() {
+        let status = hotKeys.resume()
+        log.notice("inactive; trigger resumed, status \(status, privacy: .public)")
+    }
 
     // MARK: Menus
 
@@ -199,7 +205,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         let front = NSWorkspace.shared.frontmostApplication
         sourceApp = (front?.processIdentifier == getpid()) ? lastExternalApp : front
-        switch coordinator.trigger() {
+        let result = coordinator.trigger()
+        log.notice("trigger \(String(describing: result), privacy: .public)")
+        switch result {
         case .started:
             panel.model.reset()
             panel.model.update(from: coordinator.session)
@@ -272,8 +280,22 @@ final class AppController: NSObject, NSApplicationDelegate {
             guard let self else { return }
             // A new trigger during the fade owns the coordinator now; leave it alone.
             if self.coordinator.session === closing { self.coordinator.clear() }
-            if returnFocus { app?.activate(options: []) }
+            guard returnFocus else { return }
+            let requested = app?.activate(options: []) ?? false
+            self.log.notice("panel closed; focus return requested: \(requested, privacy: .public)")
+            // Never stay the active app with nothing on screen: the assigned key is
+            // suspended while Anti-slop is active, so it would silently stop working.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                MainActor.assumeIsolated { self?.stepBackIfIdle() }
+            }
         }
+    }
+
+    /// Hide (which reactivates the previous app) when active with no panel or settings on screen.
+    func stepBackIfIdle() {
+        guard NSApp.isActive, !panel.isVisible, !(settingsWindow?.isVisible ?? false) else { return }
+        log.notice("still active with no window after closing the panel; hiding")
+        NSApp.hide(nil)
     }
 
     // MARK: Settings
