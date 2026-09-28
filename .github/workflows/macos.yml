@@ -58,6 +58,12 @@ jobs:
           BIN="$(swift build -c release --show-bin-path)"
           "$BIN/antislop-axprobe" e2e --app build/Anti-slop.app --force --out probe-e2e.json --shots shots
 
+      - name: Inspect screenshots (OCR and colors)
+        if: always()
+        continue-on-error: true
+        run: |
+          ls shots/*.png >/dev/null 2>&1 && swift scripts/inspect-shots.swift shots/app-panel-generating.png shots/app-panel-ready.png shots/app-settings.png 2>&1 | tee inspect.log || true
+
       - name: Compress screenshots
         if: always()
         continue-on-error: true
@@ -90,6 +96,8 @@ jobs:
         run: |
           echo "=== unit tests ==="
           grep -E "Executed [0-9]+ tests|error:|failed" test.log | tail -8 || true
+          echo "=== screenshot inspection ==="
+          [ -f inspect.log ] && cat inspect.log || echo "no inspection"
           for f in probe-textedit.json probe-e2e.json; do
             echo "=== $f ==="
             [ -f "$f" ] && python3 -c "import json,sys; d=json.load(open('$f')); print(d['macOS']); [print(('PASS' if c['passed'] else 'FAIL'), c['id'], '-', c['detail']) for c in d['checks']]" || echo missing
