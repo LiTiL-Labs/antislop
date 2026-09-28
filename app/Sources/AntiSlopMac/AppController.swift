@@ -295,7 +295,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Hide (which reactivates the previous app) when active with no panel or settings on screen.
     func stepBackIfIdle() {
         guard NSApp.isActive, !panel.isVisible, !(settingsWindow?.isVisible ?? false) else { return }
-        log.notice("still active with no window after closing the panel; hiding")
+        log.notice("still active with no window open; hiding")
         NSApp.hide(nil)
     }
 
@@ -313,7 +313,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.canRegister = { [weak self] b in self?.hotKeys.canRegister(b) ?? OSStatus(-1) }
         model.systemHotKeys = { SystemShortcuts.enabled() }
         model.onDone = { [weak self] new in self?.commit(new) }
-        model.onClose = { [weak self] in self?.settingsWindow?.close() }
+        model.onClose = { [weak self] in
+            self?.settingsWindow?.close()
+            // Hand focus back so the (new) key works right away, not after a click elsewhere.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                MainActor.assumeIsolated { self?.stepBackIfIdle() }
+            }
+        }
         model.onSignIn = { [weak self] p in self?.signIn(p) }
         model.onCheck = { [weak self] p in self?.checkReadiness(p) }
         model.onAcknowledgements = { [weak self] in self?.showAcknowledgements() }

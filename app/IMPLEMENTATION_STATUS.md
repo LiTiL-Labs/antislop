@@ -2,13 +2,13 @@
 
 Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build and run instructions: [README.md](README.md).
 
-**Bottom line: MVP is not complete.** The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider and, through each real provider adapter, with stub Claude Code and Codex runtimes. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.
+**Bottom line: MVP is not complete.** New real-UI checks on the macOS runner found and fixed a crash that ended the app right after every confirmed replacement (the text itself was always replaced correctly first). The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider and, through each real provider adapter, with stub Claude Code and Codex runtimes. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.
 
 ## Evidence types used here
 
 | Label | Meaning |
 |---|---|
-| **Auto** | XCTest suite (81 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
+| **Auto** | XCTest suite (82 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
 | **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle ([results](evidence/macos-ci.md)) |
 | **Fixture** | The development `FixtureProvider`, clearly labelled in the UI. It is never a live connection. |
 | **Stub-CI** | The real app on the macOS runner calling labelled stub `claude`/`codex` scripts through its real provider path ([results](evidence/macos-ci.md#full-app-live-mode-with-stub-runtimes-e2e---live-not-live-ai)). It proves the plumbing, not a live AI connection. |
@@ -62,10 +62,10 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 |---|---|---|
 | A01 | Implemented; partly shown | One `SettingsView` serves first launch, the gear and the menu. Mac-CI: launching with no key opens settings. Human UI check pending. |
 | A02 | Implemented; partly shown | Menu-bar **Rewrite Selection** and **Settings…**, plus reopening the app. Mac-CI shows the no-key launch. |
-| A03 | Logic tested | Auto (single letters and F-keys allowed with an explanation; no F-key restriction). Real single-key press not run. |
-| A04 | Combination shown live | Mac-CI: ⌃⌥⌘J registered and triggered by real HID events. Validate-before-replace is in `HotKeyManager.apply`. Cancel/invalid reassignment is a human check. |
-| A05 | Logic tested | Auto: reserved keys, modifier-only, Fn, and system shortcuts read from `com.apple.symbolichotkeys` plus defaults. Registration errors are reported, never remapped. Real keyboard not run. |
-| A06 | Implemented | Trigger suspended while Anti-slop is active; key repeat gives one activation. Not run live. |
+| A03 | **Passed (Mac-CI)** | An unmodified `` ` `` assigned as the key triggered the panel from TextEdit, and TextEdit received no character. Conflict and consumption explanations and the absence of an F-key restriction: Auto. Key presses are synthetic HID events on the runner; a person at a physical keyboard is still a human check. |
+| A04 | **Passed (Mac-CI)** | On the real settings screen: ⌃⌥⌘K recorded; Fn+J refused and ⌃⌥⌘K kept; **Cancel** kept it; **Done** saved `key_code 40` + ⌃⌥⌘ and the new key opened the panel. Validate-before-replace is in `HotKeyManager.apply`. |
+| A05 | Partly passed | Mac-CI: an Fn/Globe combination got the specific "macOS doesn't let apps register Fn/Globe combinations" message and nothing was remapped. Auto: reserved keys, modifier-only and system shortcuts read from `com.apple.symbolichotkeys` plus defaults. A system-reserved chord pressed live (e.g. ⌘Space) was not tested, because the system takes it before any app. |
+| A06 | **Passed (Mac-CI)** | Holding the key with auto-repeat gave one panel and no repeated characters in the draft (a fix, see [defects](evidence/macos-ci.md#defects-these-checks-found-and-fixed)). The key typed normally inside the panel, and it triggered again once the panel closed. The recorder receives keys while recording. Typing the key in the custom-instructions field was not probed. |
 | A07 | Tested | Auto (save/reload of every field, atomic write, unreadable file preserved). Mac-CI: the app loaded a settings file on launch. |
 | A08 | **Blocked here; ready for the user's Mac** | Codex live request impossible here (network policy). Fake-runtime tests, real-CLI flag validation, and Stub-CI in-app proposal and apply only. |
 | A09 | Live outside the app | Live-Claude: readiness and 54 rewrites through the adapter. Stub-CI: in-app proposal and apply. On-Mac sign-in and live in-app rewrite not yet run. |
@@ -73,7 +73,7 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 | A11 | Logic tested | Auto: empty, whitespace-only, oversized (no truncation). Capture refuses secure fields and non-editable controls; a real secure field was not tested. |
 | A12 | **Passed (Mac-CI)** | Exact selection, known excerpts, bounds and source hint captured from TextEdit. |
 | A13 | Passed | Auto + Live-Claude (`unknown_context`: unchanged, "Context unclear"). |
-| A14 | Passed (unit + live model) | Auto + Live-Claude `partial_whitespace`. A real partial-word selection was not probed. |
+| A14 | **Passed (Mac-CI + live model)** | Mac-CI: a mid-word selection and a span with boundary spaces were captured and spliced exactly in TextEdit. Auto + Live-Claude `partial_whitespace`. |
 | A15 | Passed (Auto) | Exactly one rule body, or none, is composed. |
 | A16 | Passed (Auto) | The next request carries the saved text; an in-flight draft is not regenerated. |
 | A17 | Claude passed | Live-Claude `custom_conflict`: fidelity won. Codex not run. |
@@ -86,10 +86,10 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 | A24 | Passed (Claude) | Runtime: no tools; the guard aborts on tool use (Auto with fakes). Live-Claude `source_instructions`. |
 | A25 | Passed (Auto) | Apply disabled while generating or applying; status is "Rewriting…" with no invented progress. |
 | A26 | Passed (Auto) | Late or stale results never overwrite user edits. |
-| A27 | Passed (Auto + Mac-CI) | Escape in the real app changed nothing; a duplicate trigger focuses the existing panel. |
-| A28 | Passed (Auto + Mac-CI fixture) | ⌘Return applied once; blank-draft guard. Return-for-newline was not exercised live. |
+| A27 | Passed (Auto + Mac-CI) | Escape in the real app changed nothing, also after edits in the panel; a duplicate trigger focuses the existing panel. |
+| A28 | **Passed (Mac-CI)** | Return added a newline without applying; ⌘Return applied the final edited draft once; with an empty editor ⌘Return changed nothing and the panel said "Enter replacement text to apply."; typing continued in the editor afterwards. The pre-mutation recheck is Auto. |
 | A29 | **Passed (Mac-CI)** | Moved selection, edited text, focus in another document and a quit app all blocked the write; nothing was written to the unrelated document. |
-| A30 | **Passed (Mac-CI)** | Only the selection changed, verified by reading the whole document back. The real app panel closes after confirmation. |
+| A30 | **Passed (Mac-CI)** | Only the selection changed, verified by reading the whole document back. The panel closes after confirmation and the app keeps running (a crash here was found and fixed, see [defects](evidence/macos-ci.md#defects-these-checks-found-and-fixed)). |
 | A31 | Stub-tested | Auto: failed/uncertain outcomes keep the draft and disable re-apply. A real failing control was not probed. |
 | A32 | Passed (Auto + Mac-CI) | Real clipboard restored after a confirmed paste; newer user copies are never overwritten (Auto). |
 | A33 | **Passed (Mac-CI)** | ⌘Z in TextEdit restored the original after an Accessibility write. |
