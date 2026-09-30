@@ -5,6 +5,8 @@ import Foundation
 /// user-supplied skill lookup.
 public struct PromptLibrary: Sendable {
     public let primaryInstructions: String
+    /// Replaces the primary prompt in slop-detection mode.
+    public let detectionInstructions: String
     let profileRules: [StyleProfileID: String]
 
     public static let bundled: PromptLibrary = {
@@ -24,7 +26,8 @@ public struct PromptLibrary: Sendable {
         case versionMismatch(String)
     }
 
-    init(primaryMarkdown: String, noAISlopMarkdown: String, humanizerMarkdown: String) throws {
+    init(primaryMarkdown: String, noAISlopMarkdown: String, humanizerMarkdown: String,
+         detectMarkdown: String = EmbeddedPrompts.detect) throws {
         guard primaryMarkdown.hasPrefix("# Internal primary prompt — version \(ContractVersion.prompt)") else {
             throw ParseError.versionMismatch("primary")
         }
@@ -34,7 +37,11 @@ public struct PromptLibrary: Sendable {
         guard humanizerMarkdown.hasPrefix("# Humanizer — reviewed app profile \(ContractVersion.profileRevision)") else {
             throw ParseError.versionMismatch("humanizer")
         }
+        guard detectMarkdown.hasPrefix("# Internal slop-detection prompt — version \(ContractVersion.prompt)") else {
+            throw ParseError.versionMismatch("detect")
+        }
         primaryInstructions = try Self.section(named: "Instruction body", in: primaryMarkdown)
+        detectionInstructions = try Self.section(named: "Instruction body", in: detectMarkdown)
         profileRules = [
             .noAISlop: try Self.section(named: "Editorial rule body", in: noAISlopMarkdown),
             .humanizer: try Self.section(named: "Editorial rule body", in: humanizerMarkdown),

@@ -114,7 +114,9 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
         return out + "\""
     }
 
-    func arguments(runtime: Runtime, instructions: String, schemaPath: String, lastMessagePath: String, workdir: String) -> [String] {
+    /// `model`/`reasoning` are the writer's choice for this request; nil sends nothing.
+    func arguments(runtime: Runtime, instructions: String, schemaPath: String, lastMessagePath: String, workdir: String,
+                   model: String? = nil, reasoning: String? = nil) -> [String] {
         var args = ["exec", "--json", "--ephemeral", "--skip-git-repo-check", "--ignore-user-config",
                     "--sandbox", "read-only", "--cd", workdir,
                     "--output-schema", schemaPath, "--output-last-message", lastMessagePath]
@@ -127,7 +129,8 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
                  "-c", "project_doc_max_bytes=0",
                  "-c", "history.persistence=\"none\"",
                  "-c", "developer_instructions=" + Self.tomlString(instructions)]
-        if let modelOverride { args += ["--model", modelOverride] }
+        if let reasoning { args += ["-c", "model_reasoning_effort=" + Self.tomlString(reasoning)] }
+        if let model = model ?? modelOverride { args += ["--model", model] }
         for feature in runtime.featuresToDisable { args += ["--disable", feature] }
         args.append("-")
         return args
@@ -190,13 +193,14 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
         return .unknown
     }
 
-    public func rewrite(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderRewrite {
+    /// Discover the runtime and recheck the login mode per request, so an
+    /// API-key login is never used silently.
+    func signedInRuntime() async throws -> Runtime {
         let runtime: Runtime
         switch await discover() {
         case .failure(let f): throw f
         case .success(let rt): runtime = rt
         }
-        // Login mode is rechecked per request so an API-key login is never used silently.
         let env = environment(for: runtime.executable)
         if let status = await RuntimeProbe.run(runtime.executable, ["login", "status"], env: env) {
             switch Self.loginState(status) {
@@ -205,14 +209,53 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
             default: break
             }
         }
+        return runtime
+    }
+
+    /// The runtime's own model catalog (`codex debug models`). No inference and
+    /// no sign-in needed; only models the catalog marks for listing are offered.
+    public func availableModels() async throws -> [ModelOption] {
+        let runtime: Runtime
+        switch await discover() {
+        case .failure(let f): throw f
+        case .success(let rt): runtime = rt
+        }
+        guard let out = await RuntimeProbe.run(runtime.executable, ["debug", "models"],
+                                               env: environment(for: runtime.executable)),
+              out.succeeded, let models = ModelCatalogParser.codexCatalog(out.stdout) else {
+            throw ProviderFailure.incompatibleRuntime(id, "model catalog unavailable")
+        }
+        return models
+    }
+
+    public func detect(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderDetection {
+        let runtime = try await signedInRuntime()
+        let started = Date()
+        let text = try await invoke(runtime: runtime, instructions: composed.instructions,
+                                    schema: DetectionValidator.providerWireSchema,
+                                    stdin: composed.dataMessage, timeout: timeout, validate: nil,
+                                    model: composed.model, reasoning: composed.reasoning, trace: composed.trace)
+        switch DetectionValidator.validate(jsonText: text, originalSelection: composed.request.selectedText) {
+        case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
+        case .success(let response):
+            let receipt = ProviderReceipt(provider: id.rawValue, runtimeVersion: runtime.version, model: composed.model ?? modelOverride,
+                                          durationMs: Int(Date().timeIntervalSince(started) * 1000),
+                                          profile: composed.profile.rawValue, outcome: "ok")
+            return ProviderDetection(response: response, receipt: receipt)
+        }
+    }
+
+    public func rewrite(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderRewrite {
+        let runtime = try await signedInRuntime()
         let started = Date()
         let text = try await invoke(runtime: runtime, instructions: composed.instructions,
                                     schema: ResponseValidator.providerWireSchema,
-                                    stdin: composed.dataMessage, timeout: timeout, validate: nil)
+                                    stdin: composed.dataMessage, timeout: timeout, validate: nil,
+                                    model: composed.model, reasoning: composed.reasoning, trace: composed.trace)
         switch ResponseValidator.validate(jsonText: text, originalSelection: composed.request.selectedText) {
         case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
         case .success(let response):
-            let receipt = ProviderReceipt(provider: id.rawValue, runtimeVersion: runtime.version, model: modelOverride,
+            let receipt = ProviderReceipt(provider: id.rawValue, runtimeVersion: runtime.version, model: composed.model ?? modelOverride,
                                           durationMs: Int(Date().timeIntervalSince(started) * 1000),
                                           profile: composed.profile.rawValue, outcome: "ok")
             return ProviderRewrite(response: response, receipt: receipt)
@@ -220,7 +263,8 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
     }
 
     func invoke(runtime: Runtime, instructions: String, schema: String, stdin: String,
-                timeout: TimeInterval, validate: ((String) -> Bool)?) async throws -> String {
+                timeout: TimeInterval, validate: ((String) -> Bool)?,
+                model: String? = nil, reasoning: String? = nil, trace: RequestTrace? = nil) async throws -> String {
         let ws = try PrivateWorkspace.create()
         defer { ws.remove() }
         // Schema and last-message files live outside the (empty) working root.
@@ -234,18 +278,20 @@ public final class CodexProvider: RewriteProvider, @unchecked Sendable {
         let spec = ProcessSpec(
             executable: runtime.executable,
             arguments: arguments(runtime: runtime, instructions: instructions, schemaPath: schemaURL.path,
-                                 lastMessagePath: lastURL.path, workdir: ws.url.path),
+                                 lastMessagePath: lastURL.path, workdir: ws.url.path, model: model, reasoning: reasoning),
             environment: environment(for: runtime.executable),
             workingDirectory: ws.url.path,
             stdin: Data(stdin.utf8),
             timeout: timeout
         )
+        trace?.recordInvocation(executable: spec.executable, arguments: spec.arguments, schema: schema)
         let out: ProcessOutput
         do {
             out = try await ProcessRunner.run(spec) { line in jsonl.inspect(line) }
         } catch {
             throw ProviderFailure.notInstalled(id)
         }
+        trace?.recordOutput(out, rawResponse: (try? Data(contentsOf: lastURL)).map { String(decoding: $0, as: UTF8.self) })
         switch out.stopReason {
         case .cancelled?: throw ProviderFailure.cancelled
         case .timedOut?:

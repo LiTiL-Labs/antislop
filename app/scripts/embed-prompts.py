@@ -13,6 +13,7 @@ app = Path(__file__).resolve().parents[1]
 root = app.parent
 sources = {
     "primary": root / "prompts" / "primary.md",
+    "detect": root / "prompts" / "detect.md",
     "noAISlop": root / "prompts" / "profiles" / "no-ai-slop.md",
     "humanizer": root / "prompts" / "profiles" / "humanizer.md",
     # Upstream MIT notices, shown under Acknowledgements.

@@ -29,6 +29,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     let hotKeys = HotKeyManager()
     let panel = PanelController()
     let toast = Toast()
+    /// Developer prompt/response window (`--debug-prompts`); nil in normal use.
+    let debugInspector: DebugInspector? = DebugInspector.isEnabled ? DebugInspector() : nil
     let fixtureMode: Bool
     var providers: [ProviderID: RewriteProvider] = [:]
     var readiness: [ProviderID: ReadinessState] = [:]
@@ -91,16 +93,26 @@ final class AppController: NSObject, NSApplicationDelegate {
         )
         coordinator.onChange = { [weak self] in self?.sessionChanged() }
         coordinator.diagnostics = { [weak self] line in self?.log.info("\(line, privacy: .public)") }
+        if let inspector = debugInspector {
+            coordinator.onTrace = { [weak self] trace in
+                inspector.show(trace)
+                inspector.place(beside: self?.panel.window)
+            }
+        }
         wirePanel()
 
-        hotKeys.onPress = { [weak self] in self?.handleTrigger(fromKey: true) }
-        if let s = settings.shortcut {
-            let status = hotKeys.apply(s)
+        hotKeys.onPress = { [weak self] action in
+            self?.handleTrigger(mode: action == .detect ? .detect : .rewrite, fromKey: true)
+        }
+        for action in HotKeyAction.allCases {
+            guard let s = SettingsModel.binding(settings, action) else { continue }
+            let status = hotKeys.apply(s, for: action)
             if status != 0 {
-                settingsNotice = "\(s.displayLabel) couldn't be registered: \(HotKeyManager.describe(status)) Choose another key."
+                settingsNotice = "\(s.displayLabel) couldn't be registered as your \(action.name): \(HotKeyManager.describe(status)) Choose another key."
                 log.error("shortcut registration failed \(status, privacy: .public)")
             }
         }
+        panel.triggerKey = hotKeys.binding(for: .rewrite)
 
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(self, selector: #selector(appActivated(_:)),
@@ -178,6 +190,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         let rewrite = NSMenuItem(title: "Rewrite Selection", action: #selector(rewriteFromMenu), keyEquivalent: "")
         rewrite.target = self
         menu.addItem(rewrite)
+        let check = NSMenuItem(title: "Check Selection for Slop", action: #selector(detectFromMenu), keyEquivalent: "")
+        check.target = self
+        menu.addItem(check)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -191,13 +206,16 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func openSettingsAction() { openSettings() }
-    @objc func rewriteFromMenu() { handleTrigger() }
+    @objc func rewriteFromMenu() { handleTrigger(mode: .rewrite) }
+    @objc func detectFromMenu() { handleTrigger(mode: .detect) }
 
     // MARK: Trigger → capture → panel
 
-    /// `fromKey` is true when the assigned key (which may still be held) started it.
-    func handleTrigger(fromKey: Bool = false) {
-        let held = fromKey ? hotKeys.binding.map { UInt16($0.keyCode) } : nil
+    /// `fromKey` is true when an assigned key (which may still be held) started it.
+    func handleTrigger(mode: SessionMode, fromKey: Bool = false) {
+        let action: HotKeyAction = mode == .detect ? .detect : .rewrite
+        // A lone modifier fires on release, so nothing is still held.
+        let held = fromKey ? hotKeys.binding(for: action).flatMap { $0.isLoneModifier ? nil : UInt16($0.keyCode) } : nil
         if !AX.trusted(prompt: false) {
             toast.show(CaptureRefusal.accessibilityNotTrusted.message)
             openSettings()
@@ -205,13 +223,25 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         let front = NSWorkspace.shared.frontmostApplication
         sourceApp = (front?.processIdentifier == getpid()) ? lastExternalApp : front
-        let result = coordinator.trigger()
-        log.notice("trigger \(String(describing: result), privacy: .public)")
+        // The anti-slop key over an open slop check rewrites that same selection.
+        if mode == .rewrite, coordinator.isActive, coordinator.session?.mode == .detect, coordinator.switchToRewrite() {
+            log.notice("trigger: detection switched to rewrite")
+            panel.focus(heldKeyCode: held)
+            return
+        }
+        let result = coordinator.trigger(mode: mode)
+        log.notice("trigger \(mode.rawValue, privacy: .public) \(String(describing: result), privacy: .public)")
         switch result {
         case .started:
             panel.model.reset()
             panel.model.update(from: coordinator.session)
             panel.show(anchor: coordinator.snapshot?.selectionBounds, heldKeyCode: held)
+            // The panel animates in; place the inspector against its final frame.
+            if let inspector = debugInspector {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    MainActor.assumeIsolated { inspector.place(beside: self?.panel.window) }
+                }
+            }
             DevSnapshot.write(panel.window, name: "app-panel-generating.png", after: 0.3)
         case .focusExisting:
             panel.focus(heldKeyCode: held)
@@ -224,6 +254,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     func wirePanel() {
         let m = panel.model
         m.onApply = { [weak self] in self?.apply() }
+        m.onTriggerKey = { [weak self] in self?.triggerKeyInPanel() }
         m.onClose = { [weak self] in self?.closePanel(returnFocus: true) }
         m.onSettings = { [weak self] in self?.openSettings() }
         m.onEdit = { [weak self] text in self?.coordinator.edit(text) }
@@ -240,6 +271,17 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         if s.phase == .succeeded {
             closePanel(returnFocus: true)
+        }
+    }
+
+    /// The anti-slop key inside the panel: apply a ready rewrite, or rewrite the
+    /// selection a slop check was looking at. Otherwise it does nothing.
+    func triggerKeyInPanel() {
+        guard let s = coordinator.session else { return }
+        if s.mode == .detect {
+            if coordinator.switchToRewrite() { panel.model.reset() ; panel.model.update(from: coordinator.session) }
+        } else {
+            apply()
         }
     }
 
@@ -310,12 +352,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         let model = SettingsModel(settings: settings, isFirstLaunch: firstLaunch,
                                   notice: settingsNotice ?? (firstLaunch ? "Welcome. Choose an AI connection and a key, then select text in any app and press it." : nil))
         model.readiness = readiness
-        model.canRegister = { [weak self] b in self?.hotKeys.canRegister(b) ?? OSStatus(-1) }
+        model.canRegister = { [weak self] b, action in self?.hotKeys.canRegister(b, for: action) ?? OSStatus(-1) }
         model.systemHotKeys = { SystemShortcuts.enabled() }
         model.onDone = { [weak self] new in self?.commit(new) }
         model.onClose = { [weak self] in self?.settingsWindow?.close() }
         model.onSignIn = { [weak self] p in self?.signIn(p) }
         model.onCheck = { [weak self] p in self?.checkReadiness(p) }
+        model.onLoadModels = { [weak self] p in self?.loadModels(p) }
         model.onAcknowledgements = { [weak self] in self?.showAcknowledgements() }
         settingsModel = model
 
@@ -352,19 +395,28 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Done: validate registration, save atomically, then adopt. A failed key
     /// registration leaves the previous valid key in place and nothing saved.
     func commit(_ new: AppSettings) -> String? {
-        if new.shortcut != settings.shortcut {
-            let status = hotKeys.apply(new.shortcut)
+        var changed: [HotKeyAction] = []
+        func rollBack() {
+            for a in changed { _ = hotKeys.apply(SettingsModel.binding(settings, a), for: a) }
+        }
+        for action in HotKeyAction.allCases {
+            let b = SettingsModel.binding(new, action)
+            guard b != SettingsModel.binding(settings, action) else { continue }
+            let status = hotKeys.apply(b, for: action)
             if status != 0 {
-                return "\(new.shortcut?.displayLabel ?? "That key") couldn't be registered: \(HotKeyManager.describe(status))"
+                rollBack()
+                return "\(b?.displayLabel ?? "That key") couldn't be registered as your \(action.name): \(HotKeyManager.describe(status))"
             }
+            changed.append(action)
         }
         do {
             try store.save(new)
         } catch {
-            _ = hotKeys.apply(settings.shortcut)
+            rollBack()
             return "Couldn't save settings. Nothing was changed."
         }
         settings = new
+        panel.triggerKey = new.shortcut
         firstLaunch = false
         settingsNotice = nil
         return nil
@@ -382,6 +434,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             let state = await provider.checkReadiness()
             self.readiness[p] = state
             self.settingsModel?.readiness[p] = state
+            // A fresh sign-in can change which models the account offers.
+            if state.isReady, case .failed? = self.settingsModel?.catalogs[p] { self.loadModels(p) }
             self.preselectProviderIfFirstLaunch()
             self.log.info("readiness \(p.rawValue, privacy: .public): \(state.label, privacy: .public)")
         }
@@ -394,6 +448,24 @@ final class AppController: NSObject, NSApplicationDelegate {
               ProviderID.allCases.allSatisfy({ readiness[$0] != nil && readiness[$0] != .checking }) else { return }
         let ready = Set(ProviderID.allCases.filter { readiness[$0]?.isReady == true })
         model.draft.providerID = AppSettings.firstLaunchProvider(ready: ready)
+    }
+
+    /// Ask a connection for its model list and hand it to the open settings screen.
+    func loadModels(_ p: ProviderID) {
+        guard let provider = providers[p] else { return }
+        settingsModel?.catalogs[p] = .loading
+        Task { @MainActor in
+            let state: ModelCatalogState
+            do {
+                state = .loaded(try await provider.availableModels())
+            } catch let f as ProviderFailure {
+                state = .failed(f.userMessage)
+            } catch {
+                state = .failed("The runtime didn't answer.")
+            }
+            self.settingsModel?.catalogs[p] = state
+            if case .loaded(let m) = state { self.log.info("models \(p.rawValue, privacy: .public): \(m.count, privacy: .public)") }
+        }
     }
 
     func signIn(_ p: ProviderID) {

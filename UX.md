@@ -28,9 +28,9 @@ These are engineering starting values, not user-mandated measurements. Respect s
 1. Header: **Anti-slop**, settings gear, close. No large toolbar.
 2. Status/intent: one compact line, with progress indicator during real work. Use “Reading context…” only during capture/enrichment; then “Rewriting…”. On completion use a tentative result, such as “Looks like a product update.”
 3. Main white editor: proposed replacement after validation. It is editable when ready, scrollable for longer passages, and supports ordinary native selection, copy, paste and undo.
-4. Footer: subtle proposed Command-Return hint and one dark primary **Anti-slop** button. Disable during capture, generation, validation, invalid/stale target, or applying.
+4. Footer: subtle hint naming the assigned key ("Right ⌥ to apply"; "⌘ Return to apply" only when no key is assigned) and one dark primary **Anti-slop** button. Disable during capture, generation, validation, invalid/stale target, or applying.
 
-For a substantive original selection, an empty or whitespace-only user-edited draft disables **Anti-slop** and Command-Return, with “Enter replacement text to apply.” Recheck immediately before replacement. Clearing a preview is not an authorized delete action.
+For a substantive original selection, an empty or whitespace-only user-edited draft disables **Anti-slop** and the apply key, with “Enter replacement text to apply.” Recheck immediately before replacement. Clearing a preview is not an authorized delete action.
 
 A single model call may return intent and rewrite together. Do not add a separate detector model merely to animate a stage. If no verified interim intent exists, leave the honest “Rewriting…” state until the result arrives. Do not invent progress percentages.
 
@@ -54,7 +54,7 @@ Proposed entrance: 160–220 ms ease-out fade with 8–12 pt slide from the chos
 | Target changed | “The original selection changed. Your draft is safe.” | Copy or explicitly select again; no automatic paste |
 | Done | Panel closes after verification | Focus returns to source; native undo verified where supported |
 
-Settings may open while a draft exists; preserve that draft in memory. A settings change affects the **next** rewrite, avoiding silent regeneration over user edits. Closing while work is pending cancels the request; delayed completions are discarded by request identity. Ordinary Return inserts a newline. Proposed Command-Return applies only when enabled. Escape/close cancels without mutation. A repeated global trigger while this panel is active should focus the existing panel rather than create duplicates; it must not auto-apply.
+Settings may open while a draft exists; preserve that draft in memory. A settings change affects the **next** rewrite, avoiding silent regeneration over user edits. Closing while work is pending cancels the request; delayed completions are discarded by request identity. Ordinary Return inserts a newline. The anti-slop key applies only when enabled; while the panel is focused it is not typed into the draft. Escape/close cancels without mutation. A repeated global trigger while this panel is active should focus the existing panel rather than create duplicates; it must not auto-apply.
 
 ## One settings screen for first launch and later use
 
@@ -77,11 +77,11 @@ Do not show raw provider output, developer prompts, token accounting controls or
 
 ## Shortcut recording and overriding
 
-The user's requirement is open assignment: the chosen supported key becomes the Anti-slop trigger. Single keys and combinations are both valid candidates. macOS reserves some keys and exposes some hardware keys differently; record what is received, validate that registration can work, and explain a real limitation. Do not silently substitute a different shortcut or claim universal conflict detection.
+The user's requirement is open assignment: the chosen supported key becomes the Anti-slop trigger. Single keys, combinations and a modifier key on its own (Right ⌥, Fn, Caps Lock; triggered by a lone press and release) are all valid. The slop-detection key is assigned the same way and must differ from the anti-slop key. macOS reserves some keys and exposes some hardware keys differently; record what is received, validate that registration can work, and explain a real limitation. Do not silently substitute a different shortcut or claim universal conflict detection.
 
 Show known conflicts with the OS or Anti-slop; warn when an assigned ordinary key will be consumed in other apps. Unknown app-specific conflicts cannot be reliably promised away. Validate the new binding before replacing the old one. A user can cancel, remove or reassign through settings without invoking the shortcut.
 
-Candidate engineering default: suspend the trigger while Anti-slop's own editor, custom-instructions text area or recorder has focus, so assigned characters do not break editing. This is an implementation recommendation, not a quoted user decision. Holding a key should produce one activation, not repeated model requests. Test supported single-key assignment as well as combinations, layout differences, input methods and system focus transitions.
+Engineering default: suspend the global trigger while Anti-slop is active, so the recorder and settings fields receive keys. Inside the panel, the anti-slop key applies instead of typing (user decision, September 30). This is an implementation recommendation, not a quoted user decision. Holding a key should produce one activation, not repeated model requests. Test supported single-key assignment as well as combinations, layout differences, input methods and system focus transitions.
 
 ## Feedback tone and accessibility
 

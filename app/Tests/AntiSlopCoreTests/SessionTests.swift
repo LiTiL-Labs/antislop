@@ -469,7 +469,8 @@ final class ShortcutAdvisorTests: XCTestCase {
 
     /// A05: real restrictions and known conflicts are explained, never remapped.
     func testRestrictionsAndConflicts() {
-        XCTAssertNotNil(ShortcutAdvisor.assess(b(0x38, []), systemHotKeys: []).blocking)
+        XCTAssertNotNil(ShortcutAdvisor.assess(b(0x38, [.command]), systemHotKeys: []).blocking,
+                        "a modifier key is either alone or paired with an ordinary key")
         XCTAssertNotNil(ShortcutAdvisor.assess(b(0x30, [.command]), systemHotKeys: []).blocking)
         XCTAssertNotNil(ShortcutAdvisor.assess(b(0x00, [.function], "a"), systemHotKeys: []).blocking)
         let spotlight = SystemHotKey(id: 64, keyCode: 0x31, modifiers: [.command])

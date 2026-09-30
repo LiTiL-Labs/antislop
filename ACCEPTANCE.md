@@ -33,7 +33,7 @@ All product checks below are **not run in this handoff**. The package includes p
 | A25 | Generating or applying | Apply disabled; truthful status; no invented percent or intent stage | State + UI |
 | A26 | User edits preview; delayed or stale provider event arrives | User edits remain; stale event discarded | Automated state |
 | A27 | Escape/close; settings open; duplicate trigger | No source mutation; cancellation blocks late results; settings preserves useful draft; no duplicate panels | State + real UI |
-| A28 | Explicit Anti-slop/Command-Return while ready | Final edited contents used once; Return alone adds newline. For substantive source, empty/whitespace-only editor buffer disables apply with concise feedback and is rejected again immediately before mutation. | State + real UI |
+| A28 | Explicit Anti-slop button or the anti-slop key pressed in the panel while ready (Command-Return without a key) | Final edited contents used once; Return alone adds newline. For substantive source, empty/whitespace-only editor buffer disables apply with concise feedback and is rejected again immediately before mutation. | State + real UI |
 | A29 | Original source changes/closes or another field gains focus | Apply blocks; no paste into unrelated field; draft retained | Real adversarial interaction |
 | A30 | Verified apply succeeds | Only original selection changes, surrounding text intact, panel closes after verification | Real source |
 | A31 | Apply fails or completion is uncertain | Draft retained, honest recovery, no automatic duplicate paste | Stub + real failure |

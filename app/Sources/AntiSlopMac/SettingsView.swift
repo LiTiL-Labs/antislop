@@ -42,13 +42,26 @@ struct SettingsView: View {
         .environment(\.colorScheme, .light)
     }
 
-    // MARK: Keyboard shortcut
+    // MARK: Keyboard shortcuts
 
     var shortcutSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionTitle("Keyboard shortcut")
+        VStack(alignment: .leading, spacing: 14) {
+            SectionTitle("Keyboard shortcuts")
+            shortcutRow(.rewrite, button: "Assign anti-slop key",
+                        help: "Rewrites the selected text. Press it again in the panel to apply.")
+            shortcutRow(.detect, button: "Assign slop-detection key",
+                        help: "Points out slop in the selected text without changing it.")
+            Text("Choose any key, a combination, or a modifier key on its own, such as Right ⌥.")
+                .font(.system(size: 12.5)).foregroundColor(Theme.secondaryText)
+        }
+    }
+
+    func shortcutRow(_ action: HotKeyAction, button: String, help: String) -> some View {
+        let current = model.binding(for: action)
+        let isError = model.shortcutIsError[action] ?? false
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                Text(model.draft.shortcut?.displayLabel ?? "Not set")
+                Text(current?.displayLabel ?? "Not set")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(Theme.primaryText)
                     .frame(minWidth: 110)
@@ -56,19 +69,19 @@ struct SettingsView: View {
                     .padding(.horizontal, 10)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.statusFill))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border))
-                    .accessibilityLabel("Current key: \(model.draft.shortcut?.displayLabel ?? "not set")")
-                if model.recording {
-                    Text(model.recorderHint ?? "Press a key…")
+                    .accessibilityLabel("Current \(action.name): \(current?.displayLabel ?? "not set")")
+                if model.recording == action {
+                    Text(model.recorderHint ?? SettingsModel.idleHint)
                         .font(.system(size: 14))
                         .foregroundColor(Theme.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: 38)
+                        .frame(minHeight: 38)
                         .padding(.horizontal, 12)
                         .background(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.action, lineWidth: 1.5))
                     Button("Cancel") { model.cancelRecording() }.buttonStyle(QuietButtonStyle())
                 } else {
-                    Button(action: model.beginRecording) {
-                        Text("Assign anti-slop key")
+                    Button(action: { model.beginRecording(action) }) {
+                        Text(button)
                             .font(.system(size: 15))
                             .foregroundColor(Theme.primaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,20 +92,20 @@ struct SettingsView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if model.draft.shortcut != nil {
-                        Button("Remove") { model.removeShortcut() }.buttonStyle(QuietButtonStyle())
+                    if current != nil {
+                        Button("Remove") { model.removeShortcut(action) }.buttonStyle(QuietButtonStyle())
                     }
                 }
             }
-            Text("Choose any supported key or combination.")
+            Text(help)
                 .font(.system(size: 12.5)).foregroundColor(Theme.secondaryText)
-            if let msg = model.shortcutMessage {
-                Label(msg, systemImage: model.shortcutIsError ? "exclamationmark.circle" : "checkmark.circle")
+            if let msg = model.shortcutMessage[action] {
+                Label(msg, systemImage: isError ? "exclamationmark.circle" : "checkmark.circle")
                     .font(.system(size: 12.5))
-                    .foregroundColor(model.shortcutIsError ? Theme.warning : Theme.secondaryText)
+                    .foregroundColor(isError ? Theme.warning : Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(model.shortcutWarnings, id: \.self) { w in
+            ForEach(model.shortcutWarnings[action] ?? [], id: \.self) { w in
                 Label(w, systemImage: "info.circle")
                     .font(.system(size: 12.5)).foregroundColor(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -148,9 +161,72 @@ struct SettingsView: View {
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border))
+            modelSection
             Text("Your selected text and a little nearby context are sent to the AI connection you choose.")
                 .font(.system(size: 11.5)).foregroundColor(Theme.secondaryText)
         }
+    }
+
+    /// Model and reasoning level, from the list the connected runtime reports.
+    var modelSection: some View {
+        let provider = model.draft.providerID
+        return VStack(alignment: .leading, spacing: 8) {
+            switch model.catalogs[provider] {
+            case .loaded(let models)?:
+                modelPickers(models)
+            case .failed(let why)?:
+                HStack(alignment: .top) {
+                    Text("Couldn't load \(provider.displayName)'s models: \(why) Anti-slop uses its default model.")
+                        .font(.system(size: 12.5)).foregroundColor(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Try again") { model.onLoadModels(provider) }.buttonStyle(QuietButtonStyle())
+                }
+            default:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).scaleEffect(0.7).frame(width: 12, height: 12)
+                    Text("Loading \(provider.displayName)'s models…").font(.system(size: 12.5)).foregroundColor(Theme.secondaryText)
+                }
+            }
+        }
+        .onAppear { model.loadModelsIfNeeded(provider) }
+        .onChange(of: provider) { model.loadModelsIfNeeded($0) }
+    }
+
+    @ViewBuilder
+    func modelPickers(_ models: [ModelOption]) -> some View {
+        let choices = model.modelChoices(models)
+        let pref = model.preference
+        let runtimeDefault = models.first(where: \.isRuntimeDefault)
+        let levels = model.reasoningLevels(models)
+        let selected = pref.model.flatMap { id in choices.first { $0.id == id } } ?? runtimeDefault
+        PickerRow(title: "Model") {
+            Picker("Model", selection: Binding(get: { pref.model ?? "" },
+                                               set: { model.selectModel($0.isEmpty ? nil : $0, catalog: models) })) {
+                Text(runtimeDefault?.displayName ?? "Default").tag("")
+                ForEach(choices) { m in Text(m.displayName).tag(m.id) }
+            }
+        }
+        PickerRow(title: "Reasoning") {
+            Picker("Reasoning", selection: Binding(get: { pref.reasoning ?? "" },
+                                                   set: { model.selectReasoning($0.isEmpty ? nil : $0) })) {
+                Text(defaultReasoningLabel(pref.model.flatMap { id in models.first { $0.id == id } })).tag("")
+                ForEach(levels, id: \.self) { Text($0.capitalized).tag($0) }
+            }
+            .disabled(levels.isEmpty)
+        }
+        if let detail = selected?.detail {
+            Text(detail).font(.system(size: 11.5)).foregroundColor(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if levels.isEmpty {
+            Text("This model doesn't offer a reasoning setting.").font(.system(size: 11.5)).foregroundColor(Theme.secondaryText)
+        }
+    }
+
+    func defaultReasoningLabel(_ m: ModelOption?) -> String {
+        if let d = m?.defaultReasoning { return "Default (\(d))" }
+        return "Default"
     }
 
     func isUnavailable(_ s: ReadinessState) -> Bool {
@@ -286,6 +362,18 @@ struct SettingsView: View {
             }
         }
         .padding(.top, 6)
+    }
+}
+
+struct PickerRow<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    var body: some View {
+        HStack {
+            Text(title).font(.system(size: 15)).foregroundColor(Theme.primaryText)
+            Spacer()
+            content.labelsHidden().pickerStyle(.menu).frame(maxWidth: 280)
+        }
     }
 }
 

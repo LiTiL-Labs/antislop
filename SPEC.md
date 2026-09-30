@@ -33,7 +33,9 @@ The product should feel like a small native writing utility. The central experie
 3. Anti-slop captures the source and selection. When usable text is captured, the panel appears and reports context reading and rewriting only as those operations occur.
 4. A concise line, such as “Looks like a product update,” describes the inferred purpose. If evidence is insufficient, use “Context unclear.” Inferred intent is not presented as certain.
 5. The proposed text fills the editor. The user accepts it as-is or edits it. Source text remains unchanged.
-6. Clicking **Anti-slop**, or the proposed Command-Return accelerator, revalidates and replaces the exact original selection. Successful verification closes the panel.
+6. Clicking **Anti-slop**, or pressing the assigned anti-slop key again, revalidates and replaces the exact original selection. Successful verification closes the panel. (Command-Return applies only when no key is assigned.)
+
+**Slop-detection mode.** A second, separately assigned key opens the same panel as a **Slop check**: a one-line summary and the passages that read as filler, inflation or formula, each quoted exactly from the selection with the pattern named. It never changes the source and never scores or guesses authorship. **Anti-slop** (the button, or the anti-slop key) rewrites that same selection.
 
 ## Selection and context boundaries
 

@@ -59,6 +59,52 @@
         }
       ]
     },
+    "detect_shortcut": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key_code": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "display_label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "modifiers": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 5,
+              "items": {
+                "enum": [
+                  "command",
+                  "option",
+                  "control",
+                  "shift",
+                  "function"
+                ]
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "key_code",
+            "display_label",
+            "modifiers",
+            "enabled"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "style_profile_id": {
       "enum": [
         "none",
@@ -117,6 +163,80 @@
           "type": "null"
         }
       ]
+    },
+    "model_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "reasoning"
+          ]
+        },
+        "claude-code": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "reasoning"
+          ]
+        }
+      }
     }
   },
   "required": [

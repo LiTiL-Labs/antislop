@@ -178,6 +178,19 @@ case "readiness":
     print("\(options.fixtureProvider ? "fixture" : p.id.rawValue): \(readinessText(r))")
     exit(r.isReady || r == .fixtureOnly ? 0 : 1)
 
+case "models":
+    let p = makeProvider(options)
+    do {
+        for m in try await p.availableModels() {
+            let levels = m.reasoningLevels.isEmpty ? "no reasoning setting" : "reasoning " + m.reasoningLevels.joined(separator: ",")
+            let def = m.defaultReasoning.map { " (default \($0))" } ?? ""
+            let resolved = m.resolvedModel.map { " → \($0)" } ?? ""
+            print("\(m.id)\(resolved) · \(m.displayName) · \(levels)\(def)")
+        }
+    } catch let f as ProviderFailure {
+        fail(f.diagnosticClass)
+    }
+
 case "compose":
     let cases = loadCases(options.fixtures)
     guard let id = options.caseID, let c = cases.first(where: { $0.id == id }) else { fail("--case <id> required") }
@@ -247,6 +260,7 @@ default:
     print("""
     usage:
       antislop-eval readiness --provider claude-code|codex|fixture [--pass-env NAME]
+      antislop-eval models --provider claude-code|codex|fixture   (lists models; no inference)
       antislop-eval corpus --provider claude-code|codex|fixture [--profiles no-ai-slop,humanizer,none]
                            [--cases id,...] [--fixtures path] [--out report.json] [--jobs N] [--model M]
       antislop-eval compose --case <id> [--profiles <profile>]

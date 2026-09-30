@@ -2,6 +2,7 @@
   "schema_version": "0.2",
   "provider_id": "codex",
   "shortcut": null,
+  "detect_shortcut": null,
   "style_profile_id": "no-ai-slop",
   "writing_preferences": {
     "simplify_wording": false,
@@ -9,5 +10,6 @@
     "avoid_em_dashes": false
   },
   "custom_writer_instructions": "",
-  "style_guide": null
+  "style_guide": null,
+  "model_preferences": {}
 }

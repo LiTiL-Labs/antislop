@@ -43,6 +43,13 @@ public final class FixtureProvider: RewriteProvider, @unchecked Sendable {
     }
 
     public func checkReadiness() async -> ReadinessState { .fixtureOnly }
+
+    public func availableModels() async throws -> [ModelOption] {
+        [ModelOption(id: "fixture-small", displayName: "Fixture small", detail: "Development fixture — not a real model",
+                     reasoningLevels: ["low", "high"], defaultReasoning: "low"),
+         ModelOption(id: "fixture-large", displayName: "Fixture large", detail: "Development fixture — not a real model",
+                     reasoningLevels: ["low", "medium", "high"], defaultReasoning: "medium")]
+    }
     public func signInCommand() async -> SignInCommand? { nil }
 
     public func rewrite(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderRewrite {
@@ -69,6 +76,7 @@ public final class FixtureProvider: RewriteProvider, @unchecked Sendable {
         case .hang:
             throw ProviderFailure.timedOut(id)
         }
+        composed.trace?.update { $0.command = ["fixture"]; $0.schema = ResponseValidator.providerWireSchema; $0.rawResponse = json }
         switch ResponseValidator.validate(jsonText: json, originalSelection: original) {
         case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
         case .success(let r):
@@ -76,6 +84,42 @@ public final class FixtureProvider: RewriteProvider, @unchecked Sendable {
                                           durationMs: Int(Date().timeIntervalSince(started) * 1000),
                                           profile: composed.profile.rawValue, outcome: "fixture")
             return ProviderRewrite(response: r, receipt: receipt)
+        }
+    }
+
+    /// Detection mode: flags the same stock lead-ins `lightEdit` removes. `.rawJSON`
+    /// is validated as a detection response, so tests can feed any shape.
+    public func detect(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderDetection {
+        let behavior = record(composed)
+        let started = Date()
+        if case .hang = behavior {
+            try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            throw ProviderFailure.timedOut(id)
+        }
+        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        if Task.isCancelled { throw ProviderFailure.cancelled }
+        let original = composed.request.selectedText
+        let json: String
+        switch behavior {
+        case .fail(let f):
+            throw f
+        case .rawJSON(let raw):
+            json = raw
+        default:
+            let found = Self.leadIns.filter { original.contains($0) }
+                .map { ["quote": $0.trimmingCharacters(in: .whitespaces), "issue": "Fixture: stock lead-in that delays the point."] }
+            let summary = found.isEmpty ? "Fixture: nothing to flag" : "Fixture: \(found.count) stock lead-in(s)"
+            let data = try JSONSerialization.data(withJSONObject: ["summary": summary, "findings": found], options: [.sortedKeys])
+            json = String(decoding: data, as: UTF8.self)
+        }
+        composed.trace?.update { $0.command = ["fixture"]; $0.schema = DetectionValidator.providerWireSchema; $0.rawResponse = json }
+        switch DetectionValidator.validate(jsonText: json, originalSelection: original) {
+        case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
+        case .success(let r):
+            let receipt = ProviderReceipt(provider: "fixture", runtimeVersion: "fixture", model: nil,
+                                          durationMs: Int(Date().timeIntervalSince(started) * 1000),
+                                          profile: composed.profile.rawValue, outcome: "fixture")
+            return ProviderDetection(response: r, receipt: receipt)
         }
     }
 
@@ -91,8 +135,9 @@ public final class FixtureProvider: RewriteProvider, @unchecked Sendable {
         return "Fixture: context unclear"
     }
 
+    static let leadIns = ["It is worth noting that ", "It is important to note that ", "We are excited to announce that "]
+
     static func lightEdit(_ s: String) -> String {
-        let leadIns = ["It is worth noting that ", "It is important to note that ", "We are excited to announce that "]
         let leading = String(s.prefix { $0 == " " || $0 == "\n" || $0 == "\t" })
         var body = String(s.dropFirst(leading.count))
         for lead in leadIns where body.hasPrefix(lead) {

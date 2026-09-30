@@ -12,6 +12,12 @@ public struct ComposedRequest: Sendable {
     /// The model-visible data object, labelled as data.
     public let dataMessage: String
     public let profile: StyleProfileID
+    public let mode: SessionMode
+    /// The writer's model and reasoning choice for the chosen connection (nil = runtime default).
+    public var model: String? = nil
+    public var reasoning: String? = nil
+    /// Developer inspector only (`--debug-prompts`); nil in normal use.
+    public var trace: RequestTrace?
 }
 
 public enum CompositionError: Error, Equatable, Sendable {
@@ -34,6 +40,7 @@ public enum PromptComposer {
     public static func compose(
         capture: CapturedText,
         settings: AppSettings,
+        mode: SessionMode = .rewrite,
         library: PromptLibrary = .bundled
     ) throws -> ComposedRequest {
         let selected = capture.selectedText
@@ -67,19 +74,29 @@ public enum PromptComposer {
             styleProfileID: settings.styleProfileID
         )
 
-        var instructions = library.primaryInstructions
+        // Detection swaps the core prompt; the one reviewed profile still rides along
+        // as a list of patterns to look for.
+        var instructions = mode == .detect ? library.detectionInstructions : library.primaryInstructions
         if let rules = library.rules(for: settings.styleProfileID) {
             instructions += "\n\n### reviewed_profile_rules (\(settings.styleProfileID.rawValue) \(settings.styleProfileID.revision))\n\n"
             instructions += rules
         }
 
         let json = try ContractJSON.encodeString(request)
-        return ComposedRequest(
+        var composed = ComposedRequest(
             request: request,
             instructions: instructions,
             dataMessage: dataPreamble + "\n\n" + json + "\n",
-            profile: settings.styleProfileID
+            profile: settings.styleProfileID,
+            mode: mode
         )
+        // A malformed saved choice falls back to the runtime default rather than reaching argv.
+        let pref = settings.modelPreference(for: settings.providerID)
+        if pref.isValid {
+            composed.model = pref.model
+            composed.reasoning = pref.reasoning
+        }
+        return composed
     }
 
     /// Rebuild a composed request from a fixture's request object (evaluation only).

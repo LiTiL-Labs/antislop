@@ -25,14 +25,21 @@ open build/Anti-slop.app
 On first launch the settings screen opens. It is the same screen the menu-bar item and the panel's gear open later. Then:
 
 1. Choose **Claude Code** or **Codex**. Open **Manage** to sign in through the provider's own tool (it opens in Terminal) or to **Check again**. **Ready** appears only after a real, harmless request succeeds.
-2. Choose **Assign anti-slop key** and press any key or combination. The screen explains known conflicts and real macOS limits, and it never substitutes a different key.
-3. Adjust the writing style, the toggles, an optional pasted guide and **Custom writing instructions**, then choose **Done**.
-4. Grant Accessibility access when asked (System Settings › Privacy & Security › Accessibility).
-5. Select text in TextEdit, which is the verified baseline, and press your key.
+2. Choose **Assign anti-slop key** and press any key, a combination, or a modifier key on its own (for example Right ⌥: press and release it alone). Optionally choose **Assign slop-detection key** the same way. The screen explains known conflicts and real macOS limits, and it never substitutes a different key.
+3. Under the connection, optionally choose a **Model** and **Reasoning** level. The list comes from the runtime itself (no model request is made to fetch it) and is saved per connection; **Default** lets the runtime decide.
+4. Adjust the writing style, the toggles, an optional pasted guide and **Custom writing instructions**, then choose **Done**.
+5. Grant Accessibility access when asked (System Settings › Privacy & Security › Accessibility).
+6. Select text in TextEdit, which is the verified baseline, and press your key.
 
-In the panel, ordinary Return inserts a newline, ⌘Return or **Anti-slop** applies, and Escape or ✕ closes without changing anything. If the original selection changed, the draft stays in the panel; use **Copy draft** or **Use current selection**. If you have no key, or a broken one, you can still use the menu-bar item (**Rewrite Selection**, **Settings…**), or relaunch the app, which reopens settings.
+In the panel, ordinary Return inserts a newline, pressing your anti-slop key again or **Anti-slop** applies (⌘Return only if no key is assigned), and Escape or ✕ closes without changing anything.
+
+The slop-detection key opens the same panel as a **Slop check**: a summary line and each flagged passage, quoted from your selection, with the pattern named. It never changes your text. Press your anti-slop key (or **Anti-slop**) there to rewrite the same selection. If the original selection changed, the draft stays in the panel; use **Copy draft** or **Use current selection**. If you have no key, or a broken one, you can still use the menu-bar item (**Rewrite Selection**, **Check Selection for Slop**, **Settings…**), or relaunch the app, which reopens settings.
 
 Because the build is ad-hoc signed, macOS may ask for Accessibility permission again after a rebuild. To avoid that, set `SIGN_IDENTITY` to a local development certificate.
+
+### Debug window (prompt and response)
+
+`open build/Anti-slop.app --args --debug-prompts` (or `ANTISLOP_DEBUG_PROMPTS=1`) opens an extra window beside the panel each time you press a key or use the menu. It shows the model and reasoning level requested, the model the runtime reported serving the request, the full instructions sent to the model, the request data (your selection and context), the response schema, the runtime command, the model's raw response before validation, and every event the runtime printed. It updates live and has a Copy button per section. It combines with `--fixture-provider`. The contents stay in memory only; nothing is logged or saved. Quit Anti-slop first, or `open` just brings back the running copy without the flag.
 
 ### Developer fixture mode
 
@@ -47,6 +54,7 @@ cd app
 swift test                                            # unit/contract tests (also run on Linux)
 swift run antislop-eval readiness --provider claude-code
 swift run antislop-eval readiness --provider codex
+swift run antislop-eval models --provider claude-code      # the model list settings shows; no inference
 swift run antislop-eval corpus --provider claude-code --out evidence/live/claude-code-corpus.json
 swift run antislop-eval corpus --provider codex --out evidence/live/codex-corpus.json
 swift run -c release antislop-axprobe textedit --out probe.json   # drives TextEdit; quit TextEdit first
