@@ -121,3 +121,46 @@ public enum ModelCatalogParser {
         }
     }
 }
+
+/// Product presets, resolved only against models and effort levels the account offers.
+public enum Intelligence: String, Codable, CaseIterable, Sendable {
+    case roomTemp = "room_temp", average, smart, genius
+    public var displayName: String {
+        switch self {
+        case .roomTemp: return "Room Temp"
+        case .average: return "Average"
+        case .smart: return "Smart"
+        case .genius: return "Genius"
+        }
+    }
+
+    public func resolve(in catalog: [ModelOption], provider: ProviderID) -> ModelPreference? {
+        guard !catalog.isEmpty else { return nil }
+        // Prefer the first (current) entry in each known family, never invent a model ID.
+        let families: [String]
+        switch (provider, self) {
+        case (.claudeCode, .genius): families = ["opus", "sonnet", "haiku"]
+        case (.claudeCode, .smart): families = ["sonnet", "opus", "haiku"]
+        case (.claudeCode, .average): families = ["sonnet", "haiku", "opus"]
+        case (.claudeCode, .roomTemp): families = ["haiku", "sonnet", "opus"]
+        case (.codex, .genius): families = ["astra", "sol", "codex", "terra", "luna", "mini"]
+        case (.codex, .smart): families = ["sol", "codex", "astra", "terra", "luna", "mini"]
+        case (.codex, .average), (.codex, .roomTemp): families = ["luna", "mini", "terra", "sol", "codex", "astra"]
+        }
+        let explicit = catalog.filter { !$0.isRuntimeDefault }
+        let chosen = families.lazy.compactMap { family in
+            explicit.first { $0.id.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains(Substring(family)) }
+        }.first ?? catalog.first(where: \.isRuntimeDefault) ?? catalog[0]
+        let preferredLevels: [String]
+        switch self {
+        case .roomTemp: preferredLevels = ["minimal", "low", "none", "medium", "high"]
+        case .average: preferredLevels = ["medium", "low", "high", "minimal"]
+        case .smart: preferredLevels = ["high", "medium", "low"]
+        case .genius: preferredLevels = ["max", "xhigh", "high", "medium", "low"]
+        }
+        let allowed = chosen.reasoningLevels.filter { $0 != "ultra" && ModelIdentifier.isValidLevel($0) }
+        let level = preferredLevels.first(where: allowed.contains)
+            ?? chosen.defaultReasoning.flatMap { allowed.contains($0) ? $0 : nil }
+        return ModelPreference(model: chosen.isRuntimeDefault ? nil : chosen.id, reasoning: level)
+    }
+}

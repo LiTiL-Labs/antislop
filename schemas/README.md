@@ -1,5 +1,7 @@
 # Proposed data contracts
 
+Current settings/request schema is 0.3. Sentence complexity replaces the old writing toggles; custom instructions and selectable profiles are removed. `style_profile_id: litil` and `profile_revision: 0.3` identify the fixed editorial standard. Settings add `launch_at_login` (default true) and per-provider `intelligence`. Swift decoding migrates 0.2 settings and original corpus inputs; new saves/requests use 0.3. Historical descriptions below are superseded where they name the removed fields.
+
 These JSON Schemas are version 0.2 design contracts, not a working provider client. They use JSON Schema Draft 2020-12. Provider adapters may translate the response schema to the supported subset without weakening application validation.
 
 - [settings.schema.json](settings.schema.json) / [example](settings.example.json): local preferences only; no secrets or live readiness claim.

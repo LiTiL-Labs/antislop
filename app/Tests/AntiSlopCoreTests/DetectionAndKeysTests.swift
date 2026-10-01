@@ -43,16 +43,15 @@ final class DetectionValidatorTests: XCTestCase {
     }
 
     func testDetectionUsesItsOwnInstructionsWithTheProfile() throws {
-        var settings = AppSettings(providerID: .claudeCode, styleProfileID: .humanizer)
+        let settings = AppSettings(providerID: .claudeCode)
         let detect = try PromptComposer.compose(capture: capture(source), settings: settings, mode: .detect)
         XCTAssertEqual(detect.mode, .detect)
         XCTAssertTrue(detect.instructions.hasPrefix(PromptLibrary.bundled.detectionInstructions))
-        XCTAssertTrue(detect.instructions.contains("reviewed_profile_rules (humanizer"))
+        XCTAssertFalse(detect.instructions.contains("reviewed_profile_rules"))
         XCTAssertFalse(detect.instructions.contains(PromptLibrary.bundled.primaryInstructions))
-        settings.styleProfileID = .none
         let rewrite = try PromptComposer.compose(capture: capture(source), settings: settings)
         XCTAssertEqual(rewrite.mode, .rewrite)
-        XCTAssertEqual(rewrite.instructions, PromptLibrary.bundled.primaryInstructions)
+        XCTAssertTrue(rewrite.instructions.hasPrefix(PromptLibrary.bundled.primaryInstructions))
         XCTAssertEqual(detect.dataMessage.contains(source), rewrite.dataMessage.contains(source))
     }
 

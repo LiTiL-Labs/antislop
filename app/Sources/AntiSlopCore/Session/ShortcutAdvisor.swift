@@ -156,7 +156,10 @@ public enum ShortcutAdvisor {
 
     /// `appliesInPanel` is true for the anti-slop key, which also applies the
     /// rewrite while the panel is focused.
-    public static func assess(_ b: ShortcutBinding, systemHotKeys: [SystemHotKey], appliesInPanel: Bool = false) -> ShortcutAssessment {
+    /// Settings provides shared usage guidance once for both shortcuts; other
+    /// callers can retain the complete per-binding explanation.
+    public static func assess(_ b: ShortcutBinding, systemHotKeys: [SystemHotKey], appliesInPanel: Bool = false,
+                              includeGeneralGuidance: Bool = true) -> ShortcutAssessment {
         let mods = b.modifierSet
         var warnings: [String] = []
 
@@ -164,7 +167,7 @@ public enum ShortcutAdvisor {
             guard b.isLoneModifier else {
                 return ShortcutAssessment(blocking: "Press the modifier key on its own, or combine modifiers with another key.", warnings: [])
             }
-            return ShortcutAssessment(blocking: nil, warnings: loneModifierWarnings(b))
+            return ShortcutAssessment(blocking: nil, warnings: loneModifierWarnings(b, includeGeneralGuidance: includeGeneralGuidance))
         }
         if KeyCodes.mediaKeys.contains(b.keyCode) {
             return ShortcutAssessment(blocking: "Volume and media keys can't be assigned.", warnings: [])
@@ -189,7 +192,7 @@ public enum ShortcutAdvisor {
                 }
             } else if b.keyCode == KeyCodes.escape {
                 warnings.append("Escape will trigger Anti-slop instead of closing dialogs or cancelling in other apps.")
-            } else {
+            } else if includeGeneralGuidance {
                 warnings.append("\(b.displayLabel) will trigger Anti-slop instead of typing or acting in other apps while Anti-slop is running.")
             }
         }
@@ -199,13 +202,13 @@ public enum ShortcutAdvisor {
         if b.keyCode == KeyCodes.returnKey && mods == [.command] {
             warnings.append("⌘Return sends messages in some apps; Anti-slop will take it over everywhere.")
         }
-        if appliesInPanel && noCommandish && KeyCodes.functionKeys[b.keyCode] == nil {
+        if includeGeneralGuidance && appliesInPanel && noCommandish && KeyCodes.functionKeys[b.keyCode] == nil {
             warnings.append("Inside the Anti-slop panel, \(b.displayLabel) applies the rewrite instead of typing.")
         }
         return ShortcutAssessment(blocking: nil, warnings: warnings)
     }
 
-    static func loneModifierWarnings(_ b: ShortcutBinding) -> [String] {
+    static func loneModifierWarnings(_ b: ShortcutBinding, includeGeneralGuidance: Bool) -> [String] {
         switch b.keyCode {
         case KeyCodes.capsLock:
             return ["Caps Lock still turns capitals on or off each time you press it, and macOS may ignore very quick taps.",
@@ -214,7 +217,9 @@ public enum ShortcutAdvisor {
             return ["If macOS uses Fn/Globe for emoji, dictation or input sources (System Settings › Keyboard), pressing it will do that too.",
                     "Anti-slop needs Accessibility access to notice a lone key."]
         default:
-            var out = ["\(b.displayLabel) triggers Anti-slop when you press and release it on its own. Shortcuts that use it with other keys keep working."]
+            var out = includeGeneralGuidance
+                ? ["\(b.displayLabel) triggers Anti-slop when you press and release it on its own. Shortcuts that use it with other keys keep working."]
+                : ["Tap lone modifiers on their own; combinations with other keys keep working."]
             if [0x37, 0x38].contains(b.keyCode) {
                 out.append("\(b.displayLabel) is easy to tap by accident; a right-hand modifier is less likely to trigger Anti-slop by mistake.")
             }

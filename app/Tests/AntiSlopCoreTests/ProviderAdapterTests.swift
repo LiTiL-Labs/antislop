@@ -131,7 +131,7 @@ final class ProviderAdapterTests: XCTestCase {
                         "OPENAI_API_KEY": "sk-should-not-pass"]
 
     func composed(_ text: String = "It is worth noting that the pilot may reduce review time for some teams.") throws -> ComposedRequest {
-        try PromptComposer.compose(capture: capture(text), settings: AppSettings(providerID: .claudeCode, customWriterInstructions: "Keep the tone measured."))
+        try PromptComposer.compose(capture: capture(text), settings: AppSettings(providerID: .claudeCode))
     }
 
     func claude(_ mode: String) throws -> (ClaudeCodeProvider, FakeRuntime) {

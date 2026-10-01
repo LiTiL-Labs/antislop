@@ -9,7 +9,7 @@ struct Options {
     var command = "help"
     var provider: ProviderID? = nil
     var fixtureProvider = false
-    var profiles: [StyleProfileID] = StyleProfileID.allCases
+    var profiles: [StyleProfileID] = [.litil]
     var cases: Set<String>? = nil
     var fixtures = "../fixtures/editorial-cases.json"
     var out: String? = nil
@@ -39,7 +39,9 @@ func parse() -> Options {
             if v == "fixture" { o.fixtureProvider = true; o.provider = .claudeCode }
             else if let p = ProviderID(rawValue: v) { o.provider = p }
             else { fail("unknown provider \(v)") }
-        case "--profiles": o.profiles = next().split(separator: ",").compactMap { StyleProfileID(rawValue: String($0)) }
+        case "--profiles":
+            guard next() == "litil" else { fail("only the consolidated litil prompt is supported") }
+            o.profiles = [.litil]
         case "--cases": o.cases = Set(next().split(separator: ",").map(String.init))
         case "--case": o.caseID = next()
         case "--fixtures": o.fixtures = next()
@@ -195,7 +197,7 @@ case "compose":
     let cases = loadCases(options.fixtures)
     guard let id = options.caseID, let c = cases.first(where: { $0.id == id }) else { fail("--case <id> required") }
     var req = c.request
-    let profile = options.profiles.first ?? .noAISlop
+    let profile = options.profiles.first ?? .litil
     req.styleProfileID = profile
     req.profileRevision = profile.revision
     let composed = try PromptComposer.compose(request: req)
@@ -261,7 +263,7 @@ default:
     usage:
       antislop-eval readiness --provider claude-code|codex|fixture [--pass-env NAME]
       antislop-eval models --provider claude-code|codex|fixture   (lists models; no inference)
-      antislop-eval corpus --provider claude-code|codex|fixture [--profiles no-ai-slop,humanizer,none]
+      antislop-eval corpus --provider claude-code|codex|fixture [--profiles litil]
                            [--cases id,...] [--fixtures path] [--out report.json] [--jobs N] [--model M]
       antislop-eval compose --case <id> [--profiles <profile>]
     --pass-env forwards one named variable (never API keys) for headless test environments.

@@ -5,7 +5,6 @@ import Foundation
 public enum Limits {
     public static let selectedText = 20_000
     public static let contextPerSide = 1_500
-    public static let customInstructions = 4_000
     public static let guideText = 8_000
     public static let guideLabel = 120
     public static let responseText = 40_000

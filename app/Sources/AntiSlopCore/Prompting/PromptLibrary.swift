@@ -1,24 +1,14 @@
 import Foundation
 
 /// Trusted, developer-versioned editorial instructions compiled into the app.
-/// Only allowlisted profile IDs map to rule bodies; there is no path, URL or
-/// user-supplied skill lookup.
+/// One consolidated editorial standard; there is no runtime skill or profile lookup.
 public struct PromptLibrary: Sendable {
     public let primaryInstructions: String
     /// Replaces the primary prompt in slop-detection mode.
     public let detectionInstructions: String
-    let profileRules: [StyleProfileID: String]
-
     public static let bundled: PromptLibrary = {
-        do {
-            return try PromptLibrary(
-                primaryMarkdown: EmbeddedPrompts.primary,
-                noAISlopMarkdown: EmbeddedPrompts.noAISlop,
-                humanizerMarkdown: EmbeddedPrompts.humanizer
-            )
-        } catch {
-            fatalError("Embedded prompt resources are malformed: \(error)")
-        }
+        do { return try PromptLibrary(primaryMarkdown: EmbeddedPrompts.primary) }
+        catch { fatalError("Embedded prompt resources are malformed: \(error)") }
     }()
 
     public enum ParseError: Error, Equatable {
@@ -26,31 +16,15 @@ public struct PromptLibrary: Sendable {
         case versionMismatch(String)
     }
 
-    init(primaryMarkdown: String, noAISlopMarkdown: String, humanizerMarkdown: String,
-         detectMarkdown: String = EmbeddedPrompts.detect) throws {
+    init(primaryMarkdown: String, detectMarkdown: String = EmbeddedPrompts.detect) throws {
         guard primaryMarkdown.hasPrefix("# Internal primary prompt — version \(ContractVersion.prompt)") else {
             throw ParseError.versionMismatch("primary")
-        }
-        guard noAISlopMarkdown.hasPrefix("# No AI Slop — reviewed app profile \(ContractVersion.profileRevision)") else {
-            throw ParseError.versionMismatch("no-ai-slop")
-        }
-        guard humanizerMarkdown.hasPrefix("# Humanizer — reviewed app profile \(ContractVersion.profileRevision)") else {
-            throw ParseError.versionMismatch("humanizer")
         }
         guard detectMarkdown.hasPrefix("# Internal slop-detection prompt — version \(ContractVersion.prompt)") else {
             throw ParseError.versionMismatch("detect")
         }
         primaryInstructions = try Self.section(named: "Instruction body", in: primaryMarkdown)
         detectionInstructions = try Self.section(named: "Instruction body", in: detectMarkdown)
-        profileRules = [
-            .noAISlop: try Self.section(named: "Editorial rule body", in: noAISlopMarkdown),
-            .humanizer: try Self.section(named: "Editorial rule body", in: humanizerMarkdown),
-        ]
-    }
-
-    /// The reviewed rule body for a profile, or nil for `.none`.
-    public func rules(for profile: StyleProfileID) -> String? {
-        profileRules[profile]
     }
 
     /// Text after `## <name>` up to the next level-2 heading or end of file.
@@ -72,7 +46,7 @@ public struct PromptLibrary: Sendable {
 public enum Acknowledgements {
     public static var text: String {
         """
-        Anti-slop's two writing styles are reviewed adaptations, not endorsements by their authors.
+        LiTiL Labs' consolidated Anti-Slop prompt includes adaptations of these sources, without endorsement by their authors.
 
         No AI Slop by Peter Yang — https://github.com/petergyang/no-ai-slop (revision 000650b1)
 

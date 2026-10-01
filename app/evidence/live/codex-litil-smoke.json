@@ -1,0 +1,54 @@
+{
+  "generated_at" : "2026-10-01T03:03:59Z",
+  "host" : "macOS Version 27.0 (Build 26A428)",
+  "prompt_version" : "0.3",
+  "provider" : "codex",
+  "readiness" : "Ready: ChatGPT account · runtime 0.159.2",
+  "results" : [
+    {
+      "case_id" : "filler",
+      "duration_ms" : 6768,
+      "intent" : "Describe a possible benefit of the pilot.",
+      "matches_acceptable_example" : true,
+      "missing_literals" : [
+
+      ],
+      "profile" : "litil",
+      "review_rule" : "Remove empty framing without strengthening the finding.",
+      "rewritten_text" : "The pilot may reduce review time for some teams.",
+      "runtime_version" : "0.159.2",
+      "status" : "ok",
+      "unchanged" : false
+    },
+    {
+      "case_id" : "legal_obligation",
+      "duration_ms" : 9124,
+      "intent" : "State Acme LLC’s notice obligation and the exception for a written agreement.",
+      "matches_acceptable_example" : true,
+      "missing_literals" : [
+
+      ],
+      "profile" : "litil",
+      "review_rule" : "Retain obligation, defined term, parties, cross-reference, deadline and exception.",
+      "rewritten_text" : "Subject to Section 4.2, Acme LLC shall notify Beta Ltd within 10 Business Days unless the parties agree otherwise in writing.",
+      "runtime_version" : "0.159.2",
+      "status" : "ok",
+      "unchanged" : true
+    },
+    {
+      "case_id" : "punctuation_preference",
+      "duration_ms" : 7180,
+      "intent" : "Report feature readiness with an exception for offline mode.",
+      "matches_acceptable_example" : true,
+      "missing_literals" : [
+
+      ],
+      "profile" : "litil",
+      "review_rule" : "Avoid em dashes when requested without losing exception.",
+      "rewritten_text" : "The feature is ready, except for offline mode.",
+      "runtime_version" : "0.159.2",
+      "status" : "ok",
+      "unchanged" : false
+    }
+  ]
+}

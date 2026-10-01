@@ -1,15 +1,13 @@
 {
-  "schema_version": "0.2",
+  "schema_version": "0.3",
   "provider_id": "codex",
   "shortcut": null,
   "detect_shortcut": null,
-  "style_profile_id": "no-ai-slop",
   "writing_preferences": {
-    "simplify_wording": false,
-    "keep_my_tone": true,
-    "avoid_em_dashes": false
+    "sentence_complexity": "balanced"
   },
-  "custom_writer_instructions": "",
   "style_guide": null,
-  "model_preferences": {}
+  "model_preferences": {},
+  "launch_at_login": true,
+  "intelligence": {}
 }

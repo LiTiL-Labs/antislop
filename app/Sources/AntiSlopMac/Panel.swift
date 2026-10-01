@@ -59,7 +59,7 @@ final class PanelModel: ObservableObject {
         didSet { commandReturnApplies = applyKey == nil }
     }
     var applyKeyLabel: String { applyKey?.displayLabel ?? "⌘ Return" }
-    var title: String { mode == .detect ? "Slop check" : "Anti-slop" }
+    var title: String { mode == .detect ? "Slop Check" : "Anti-Slop" }
 
     func update(from session: RewriteSession?) {
         guard let s = session else { return }
@@ -123,7 +123,7 @@ final class PanelModel: ObservableObject {
             switch e {
             case .selectionTooLong(let n): statusText = CaptureRefusal.tooLong(count: n).message
             case .emptySelection: statusText = CaptureRefusal.noSelection.message
-            default: statusText = "Couldn't prepare this selection. Check the writing guide and instructions in settings."
+            default: statusText = "Couldn't prepare this selection. Check the writing guide in settings."
             }
             showsEditor = false
             actions = [.openSettings]
@@ -168,7 +168,7 @@ final class PanelModel: ObservableObject {
             switch e {
             case .selectionTooLong(let n): statusText = CaptureRefusal.tooLong(count: n).message
             case .emptySelection: statusText = CaptureRefusal.noSelection.message
-            default: statusText = "Couldn't prepare this selection. Check the writing guide and instructions in settings."
+            default: statusText = "Couldn't prepare this selection. Check the writing guide in settings."
             }
             actions = [.openSettings]
         default:
@@ -255,8 +255,9 @@ struct PanelView: View {
     var header: some View {
         HStack(spacing: 4) {
             Text(model.title)
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundColor(Theme.primaryText)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(Theme.orange)
+                .background(Theme.shell)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             IconButton(systemName: "gearshape", label: "Settings", action: model.onSettings)

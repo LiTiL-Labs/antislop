@@ -1,0 +1,112 @@
+{
+  "baseline" : "TextEdit plain-text document (AppKit NSTextView)",
+  "checks" : [
+    {
+      "detail" : "process is trusted",
+      "id" : "accessibility_trusted",
+      "passed" : true
+    },
+    {
+      "detail" : "Anti-slop pid 28705",
+      "id" : "e2e_launch",
+      "passed" : true
+    },
+    {
+      "detail" : "panel window visible",
+      "id" : "e2e_panel_appears",
+      "passed" : true
+    },
+    {
+      "detail" : "document unchanged after Escape",
+      "id" : "e2e_escape_no_change",
+      "passed" : true
+    },
+    {
+      "detail" : "fixture draft replaced only the selection",
+      "id" : "e2e_apply_replaces_selection",
+      "passed" : true
+    },
+    {
+      "detail" : "panel dismissed after confirmed replacement: true; app still running: true",
+      "id" : "e2e_panel_closes_after_apply",
+      "passed" : true
+    },
+    {
+      "detail" : "settings window opened on launch with no key assigned",
+      "id" : "e2e_settings_without_key",
+      "passed" : true
+    },
+    {
+      "detail" : "Current anti-slop key: ⌃⌥⌘K; message shown: true",
+      "id" : "recorder_records_combination",
+      "passed" : true
+    },
+    {
+      "detail" : "Current anti-slop key: ⌃⌥⌘K; Fn/Globe explanation shown: true",
+      "id" : "recorder_refuses_invalid_keeps_previous",
+      "passed" : true
+    },
+    {
+      "detail" : "Cancel pressed: true; Current anti-slop key: ⌃⌥⌘K",
+      "id" : "recorder_cancel_keeps_previous",
+      "passed" : true
+    },
+    {
+      "detail" : "Done pressed: true; settings file has key_code 40 modifiers [\"command\", \"control\", \"option\"]",
+      "id" : "done_saves_new_key",
+      "passed" : true
+    },
+    {
+      "detail" : "the newly assigned ⌃⌥⌘K opened the panel",
+      "id" : "new_key_triggers",
+      "passed" : true
+    },
+    {
+      "detail" : "unmodified ` opened the panel; the document received no character: true",
+      "id" : "single_key_triggers",
+      "passed" : true
+    },
+    {
+      "detail" : "1 panel window(s); draft: \"The pilot may reduce errors for some teams.\"",
+      "id" : "held_key_one_activation",
+      "passed" : true
+    },
+    {
+      "detail" : "editor reads \"Edited by hand\\nsecond line.\"; document unchanged: true; frontmost TextEdit; Anti-slop focus AXTextArea \"Proposed replacement\"; panel visible true",
+      "id" : "return_inserts_newline",
+      "passed" : true
+    },
+    {
+      "detail" : "` applied: the document now holds the edited draft exactly once",
+      "id" : "assigned_key_applies_in_panel",
+      "passed" : true
+    },
+    {
+      "detail" : "panel dismissed after confirmed replacement: true; app still running: true",
+      "id" : "panel_closes_after_edited_apply",
+      "passed" : true
+    },
+    {
+      "detail" : "` opened the panel again; the document received no character",
+      "id" : "key_triggers_again_after_panel",
+      "passed" : true
+    },
+    {
+      "detail" : "editor before ` \"\"; document unchanged and panel open: true; panel says: Fixture: looks like plain text document, Fixture preview — not live AI | No changes needed. | Enter replacement text to apply.",
+      "id" : "blank_draft_not_applied",
+      "passed" : true
+    },
+    {
+      "detail" : "editor reads \"Kept typing.\"; frontmost TextEdit; Anti-slop focus AXTextArea \"Proposed replacement\"; panel visible true",
+      "id" : "typing_continues_after_blocked_apply",
+      "passed" : true
+    },
+    {
+      "detail" : "Escape closed the panel: true; document unchanged: true",
+      "id" : "escape_after_edits_no_change",
+      "passed" : true
+    }
+  ],
+  "generatedAt" : "2026-10-01T03:11:08Z",
+  "macOS" : "Version 27.0 (Build 26A428)"
+}

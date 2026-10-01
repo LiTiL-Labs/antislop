@@ -28,7 +28,6 @@ final class SettingsModel: ObservableObject {
     @Published var guideExpanded = false
     @Published var guideLabel = ""
     @Published var guideText = ""
-    @Published var moreOptions = false
     @Published var errors: [String] = []
     @Published var notice: String?
     /// Set once the user picks a connection; automatic preselection stops then.
@@ -41,7 +40,6 @@ final class SettingsModel: ObservableObject {
     var onCheck: (ProviderID) -> Void = { _ in }
     /// Ask the connection for its model list (no inference).
     var onLoadModels: (ProviderID) -> Void = { _ in }
-    var onAcknowledgements: () -> Void = {}
     var canRegister: (ShortcutBinding, HotKeyAction) -> OSStatus = { _, _ in 0 }
     var systemHotKeys: () -> [SystemHotKey] = { [] }
 
@@ -59,10 +57,10 @@ final class SettingsModel: ObservableObject {
         }
         for action in HotKeyAction.allCases {
             if let b = Self.binding(settings, action) {
-                shortcutWarnings[action] = ShortcutAdvisor.assess(b, systemHotKeys: [], appliesInPanel: action == .rewrite).warnings
+                shortcutWarnings[action] = ShortcutAdvisor.assess(b, systemHotKeys: [], appliesInPanel: action == .rewrite,
+                                                                  includeGeneralGuidance: false).warnings
             }
         }
-        moreOptions = settings.writingPreferences.avoidEmDashes
     }
 
     // MARK: Shortcut recording
@@ -72,6 +70,14 @@ final class SettingsModel: ObservableObject {
     }
 
     func binding(for action: HotKeyAction) -> ShortcutBinding? { Self.binding(draft, action) }
+
+    /// Specific caveats appear once below the shared shortcut guidance, even
+    /// when both assignments have the same OS requirement.
+    var shortcutCaveats: [String] {
+        var seen = Set<String>()
+        return HotKeyAction.allCases.flatMap { shortcutWarnings[$0] ?? [] }
+            .filter { seen.insert($0).inserted }
+    }
 
     private func setBinding(_ b: ShortcutBinding?, for action: HotKeyAction) {
         if action == .rewrite { draft.shortcut = b } else { draft.detectShortcut = b }
@@ -150,7 +156,8 @@ final class SettingsModel: ObservableObject {
             shortcutIsError[action] = true
             return
         }
-        let assessment = ShortcutAdvisor.assess(candidate, systemHotKeys: systemHotKeys(), appliesInPanel: action == .rewrite)
+        let assessment = ShortcutAdvisor.assess(candidate, systemHotKeys: systemHotKeys(), appliesInPanel: action == .rewrite,
+                                                 includeGeneralGuidance: false)
         if let blocking = assessment.blocking {
             shortcutMessage[action] = blocking
             shortcutIsError[action] = true
@@ -165,7 +172,7 @@ final class SettingsModel: ObservableObject {
         setBinding(candidate, for: action)
         shortcutWarnings[action] = assessment.warnings
         shortcutIsError[action] = false
-        shortcutMessage[action] = "\(label) is ready to use after you choose Done."
+        shortcutMessage[action] = nil
     }
 
     func removeShortcut(_ action: HotKeyAction) {
@@ -173,9 +180,7 @@ final class SettingsModel: ObservableObject {
         setBinding(nil, for: action)
         shortcutWarnings[action] = []
         shortcutIsError[action] = false
-        shortcutMessage[action] = action == .rewrite
-            ? "No key assigned. Use the Anti-slop menu bar item to open settings or rewrite a selection."
-            : "No key assigned. Use the Anti-slop menu bar item to check a selection for slop."
+        shortcutMessage[action] = nil
     }
 
     // MARK: Model and reasoning
@@ -189,47 +194,17 @@ final class SettingsModel: ObservableObject {
 
     var preference: ModelPreference { draft.modelPreference(for: draft.providerID) }
 
-    /// The catalog entries offered as choices; Claude Code's own "default" entry is
-    /// the Default row instead. A saved model the runtime no longer lists stays visible.
-    func modelChoices(_ models: [ModelOption]) -> [ModelOption] {
-        var out = models.filter { !$0.isRuntimeDefault }
-        if let saved = preference.model, !out.contains(where: { $0.id == saved }) {
-            out.append(ModelOption(id: saved, displayName: "\(saved) (not currently offered)"))
+    var intelligence: Intelligence { draft.intelligence[draft.providerID] ?? .smart }
+
+    func selectIntelligence(_ value: Intelligence, catalog: [ModelOption]) {
+        draft.intelligence[draft.providerID] = value
+        if let resolved = value.resolve(in: catalog, provider: draft.providerID) {
+            draft.modelPreferences[draft.providerID] = resolved
         }
-        return out
     }
 
-    /// Levels offered for the selected model. With the runtime default, Claude Code's
-    /// default entry says what it accepts; otherwise only levels every model accepts.
-    func reasoningLevels(_ models: [ModelOption]) -> [String] {
-        if let id = preference.model {
-            return models.first { $0.id == id }?.reasoningLevels ?? []
-        }
-        if let def = models.first(where: \.isRuntimeDefault) { return def.reasoningLevels }
-        guard let first = models.first else { return [] }
-        return first.reasoningLevels.filter { level in models.allSatisfy { $0.reasoningLevels.contains(level) } }
-    }
-
-    func selectModel(_ id: String?, catalog: [ModelOption]) {
-        var pref = preference
-        pref.model = id
-        // Keep the reasoning level only if the new model accepts it.
-        if let r = pref.reasoning, !reasoningLevels(catalog, model: id).contains(r) { pref.reasoning = nil }
-        draft.modelPreferences[draft.providerID] = pref
-    }
-
-    func selectReasoning(_ level: String?) {
-        var pref = preference
-        pref.reasoning = level
-        draft.modelPreferences[draft.providerID] = pref
-    }
-
-    private func reasoningLevels(_ models: [ModelOption], model: String?) -> [String] {
-        let saved = draft.modelPreferences[draft.providerID]
-        draft.modelPreferences[draft.providerID] = ModelPreference(model: model)
-        defer { draft.modelPreferences[draft.providerID] = saved }
-        return reasoningLevels(models)
-    }
+    var loginStatus: String { LoginItem.statusText }
+    func openLoginItems() { LoginItem.openSettings() }
 
     // MARK: Guide
 
@@ -248,6 +223,10 @@ final class SettingsModel: ObservableObject {
 
     func done() {
         cancelRecording()
+        // Resolve the visible preset on Done, including the first migration from old model controls.
+        if case .loaded(let models)? = catalogs[draft.providerID] {
+            selectIntelligence(intelligence, catalog: models)
+        }
         var candidate = draft
         let label = guideLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         if guideExpanded || draft.styleGuide != nil {

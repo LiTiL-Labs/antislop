@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate this handoff package, not an Anti-slop application.
+"""Validate authored documents, current schemas and unchanged upstream sources.
 
 Uses Python standard library; if jsonschema is available, also performs full
 Draft 2020-12 metaschema/example validation. No model requests or app actions.
@@ -8,6 +8,7 @@ from pathlib import Path
 import hashlib,json,re,sys,zipfile
 root=Path(__file__).resolve().parents[1]
 checks=[]
+files=[f for f in root.rglob('*') if f.is_file() and not any(p in {'.git','.build','build'} for p in f.relative_to(root).parts)]
 def passed(label): checks.append(label);print('PASS',label)
 required=['README.md','AGENTS.md','CLAUDE.md','CODEX_HANDOFF.md','DEVELOPMENT_HANDOFF.md','SPEC.md','UX.md','ARCHITECTURE.md','PROMPTING.md','DECISIONS.md','IMPLEMENTATION.md','ACCEPTANCE.md','SOURCES.md','prompts/primary.md','prompts/profiles/no-ai-slop.md','prompts/profiles/humanizer.md','assets/ready-editor.png','assets/processing-editor.png','assets/settings.png','third_party/PROVENANCE.md','third_party/manifest.json','validation/STATUS.md']
 for name in required: assert (root/name).is_file(),name
@@ -20,16 +21,16 @@ assert len(claude.splitlines())<=4, 'shared instructions must not be duplicated'
 compat=(root/'CODEX_HANDOFF.md').read_text()
 assert 'Compatibility pointer' in compat and 'DEVELOPMENT_HANDOFF.md' in compat
 assert len(compat.splitlines())<=4
-for f in root.rglob('*.md'):
+for f in (p for p in files if p.suffix=='.md'):
  if 'third_party' in f.relative_to(root).parts or f.name=='CODEX_HANDOFF.md':continue
  t=f.read_text()
  assert 'CODEX_HANDOFF.md' not in t,(f,'noncanonical kickoff reference')
  assert 'Codex development handoff' not in t and 'owning Codex chat' not in t,(f,'agent-specific execution branding')
 passed('Claude import resolves; neutral kickoff is canonical; historical link has a short pointer')
-jsons={str(f.relative_to(root)):json.loads(f.read_text()) for f in root.rglob('*.json')}
+jsons={str(f.relative_to(root)):json.loads(f.read_text()) for f in files if f.suffix=='.json'}
 passed(f'{len(jsons)} JSON files parse')
 links=0
-for f in root.rglob('*.md'):
+for f in (p for p in files if p.suffix=='.md'):
  if 'third_party' in f.relative_to(root).parts: continue # Preserve upstream files unchanged; their own repo may contain unbundled links.
  for target in re.findall(r'(?<!!)\[[^\]\n]*\]\(([^)]+)\)|!\[[^\]\n]*\]\(([^)]+)\)',f.read_text()):
   t=(target[0] or target[1]).strip().strip('<>')
@@ -71,7 +72,12 @@ else:
  passed('three JSON Schemas meet Draft 2020-12 metaschema; all three examples validate')
  cases=jsons['fixtures/editorial-cases.json']['cases'];assert len(cases)==18
  for c in cases:
-  validators['rewrite-request'].validate(c['request'])
+  # Historical source corpus stays unchanged. Validate the same v0.3 migration
+  # as the Swift decoder; XCTest separately verifies actual decoding/composition.
+  migrated=dict(c['request'])
+  migrated.pop('custom_writer_instructions',None)
+  migrated.update(schema_version='0.3',prompt_version='0.3',style_profile_id='litil',profile_revision='0.3',user_settings={'sentence_complexity':'balanced'})
+  validators['rewrite-request'].validate(migrated)
   validators['rewrite-response'].validate({'intent':'Fixture example','rewritten_text':c['acceptable_example'],'note':None})
   assert c['status']=='not_run'
   for protected in c['must_preserve']:assert protected in c['acceptable_example'],(c['id'],protected)
@@ -94,12 +100,13 @@ assert all(x in tone['acceptable_example'] for x in ['I think','tiny','could','a
 for name in ['UX.md','ARCHITECTURE.md','SPEC.md','ACCEPTANCE.md']:
  t=(root/name).read_text();assert 'whitespace-only' in t and ('immediately before' in t or 'rechecks' in t),name
 passed('review fixes retained: tone fidelity and final empty-draft guard')
-if (root/'SHA256SUMS').exists():
+if '--verify-original-checksums' in sys.argv and (root/'SHA256SUMS').exists():
  for line in (root/'SHA256SUMS').read_text().splitlines():
   digest,name=line.split('  ',1);assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
  passed('package SHA256SUMS verified')
-if len(sys.argv)>1:
- archive=Path(sys.argv[1])
+archives=[a for a in sys.argv[1:] if not a.startswith('--')]
+if archives:
+ archive=Path(archives[0])
  with zipfile.ZipFile(archive) as z:
   assert z.testzip() is None
   expected={f'{root.name}/{f.relative_to(root).as_posix()}' for f in root.rglob('*') if f.is_file()}
@@ -107,4 +114,5 @@ if len(sys.argv)>1:
   for f in root.rglob('*'):
    if f.is_file():assert z.read(f'{root.name}/{f.relative_to(root).as_posix()}')==f.read_bytes()
  passed('ZIP integrity, exact inventory and every archived byte verified')
+print('NOTE original SHA256SUMS is historical; pass --verify-original-checksums only for an original handoff copy')
 print(f'PACKAGE VALIDATION COMPLETE: {len(checks)} checks; no application or model tests performed')

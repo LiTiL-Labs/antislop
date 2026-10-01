@@ -5,9 +5,8 @@ import Foundation
 // nullable keys to be present, so encoding is written out explicitly.
 
 public enum ContractVersion {
-    public static let schema = "0.2"
-    public static let prompt = "0.2"
-    public static let profileRevision = "0.2"
+    public static let schema = "0.3"
+    public static let prompt = "0.3"
 }
 
 public enum SelectionKind: String, Codable, CaseIterable, Sendable {
@@ -106,24 +105,31 @@ extension SourceHint: Codable {
     }
 }
 
-public struct WritingPreferences: Codable, Equatable, Sendable {
-    public var simplifyWording: Bool
-    public var keepMyTone: Bool
-    public var avoidEmDashes: Bool
+public enum SentenceComplexity: String, Codable, CaseIterable, Sendable {
+    case caveman, plain, balanced, polished, lawyer
 
-    public init(simplifyWording: Bool = false, keepMyTone: Bool = true, avoidEmDashes: Bool = false) {
-        self.simplifyWording = simplifyWording
-        self.keepMyTone = keepMyTone
-        self.avoidEmDashes = avoidEmDashes
+    public var displayName: String { rawValue.capitalized }
+    public var guidance: String {
+        switch self {
+        case .caveman: return "Use the shortest clear sentences and everyday words. Keep complete, grammatical thoughts; never caricature the writer or omit conditions."
+        case .plain: return "Use plain language and mostly short sentences, with one main idea per sentence where the logical relationships survive."
+        case .balanced: return "Use natural sentence variety and familiar wording; keep subordinate clauses when they clarify a relationship."
+        case .polished: return "Use fluent, nuanced sentences and a professional register. Allow varied clauses without ornamental vocabulary or filler."
+        case .lawyer: return "Use precise, formal sentences with carefully connected clauses and explicit qualifications. Complexity must serve accuracy; never add legalese, obligations, citations or legal advice."
+        }
     }
+}
 
-    /// Factory defaults from UX.md: simplify off, keep my tone on, em dashes allowed.
+public struct WritingPreferences: Codable, Equatable, Sendable {
+    public var sentenceComplexity: SentenceComplexity
+    public init(sentenceComplexity: SentenceComplexity = .balanced) {
+        self.sentenceComplexity = sentenceComplexity
+    }
     public static let defaults = WritingPreferences()
-
-    enum CodingKeys: String, CodingKey {
-        case simplifyWording = "simplify_wording"
-        case keepMyTone = "keep_my_tone"
-        case avoidEmDashes = "avoid_em_dashes"
+    enum CodingKeys: String, CodingKey { case sentenceComplexity = "sentence_complexity" }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sentenceComplexity = try c.decodeIfPresent(SentenceComplexity.self, forKey: .sentenceComplexity) ?? .balanced
     }
 }
 
@@ -136,29 +142,10 @@ public struct StyleGuide: Codable, Equatable, Sendable {
     }
 }
 
+/// Fixed editorial-standard identifier in request receipts, not a user-selectable profile.
 public enum StyleProfileID: String, Codable, CaseIterable, Sendable {
-    case none
-    case noAISlop = "no-ai-slop"
-    case humanizer
-
-    /// The request's paired profile_revision value.
-    public var revision: String { self == .none ? "none" : ContractVersion.profileRevision }
-
-    public var displayName: String {
-        switch self {
-        case .noAISlop: return "No AI Slop"
-        case .humanizer: return "Humanizer"
-        case .none: return "None"
-        }
-    }
-
-    public var helperText: String {
-        switch self {
-        case .noAISlop: return "Light, proportional edits. Recommended."
-        case .humanizer: return "Broader review of repetitive or inflated patterns."
-        case .none: return "Core copy editing only."
-        }
-    }
+    case litil
+    public var revision: String { ContractVersion.prompt }
 }
 
 public enum ProviderID: String, Codable, CaseIterable, Sendable {
@@ -190,7 +177,6 @@ public struct RewriteRequest: Equatable, Sendable {
     public var nearbyContext: NearbyContext
     public var sourceHint: SourceHint
     public var userSettings: WritingPreferences
-    public var customWriterInstructions: String
     public var styleGuide: StyleGuide?
     public var styleProfileID: StyleProfileID
     public var profileRevision: String
@@ -201,7 +187,6 @@ public struct RewriteRequest: Equatable, Sendable {
         nearbyContext: NearbyContext,
         sourceHint: SourceHint,
         userSettings: WritingPreferences,
-        customWriterInstructions: String,
         styleGuide: StyleGuide?,
         styleProfileID: StyleProfileID
     ) {
@@ -210,7 +195,6 @@ public struct RewriteRequest: Equatable, Sendable {
         self.nearbyContext = nearbyContext
         self.sourceHint = sourceHint
         self.userSettings = userSettings
-        self.customWriterInstructions = customWriterInstructions
         self.styleGuide = styleGuide
         self.styleProfileID = styleProfileID
         self.profileRevision = styleProfileID.revision
@@ -226,24 +210,22 @@ extension RewriteRequest: Codable {
         case nearbyContext = "nearby_context"
         case sourceHint = "source_hint"
         case userSettings = "user_settings"
-        case customWriterInstructions = "custom_writer_instructions"
         case styleGuide = "style_guide"
         case styleProfileID = "style_profile_id"
         case profileRevision = "profile_revision"
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try c.decode(String.self, forKey: .schemaVersion)
-        promptVersion = try c.decode(String.self, forKey: .promptVersion)
+        schemaVersion = ContractVersion.schema
+        promptVersion = ContractVersion.prompt
         selectedText = try c.decode(String.self, forKey: .selectedText)
         selectionKind = try c.decode(SelectionKind.self, forKey: .selectionKind)
         nearbyContext = try c.decode(NearbyContext.self, forKey: .nearbyContext)
         sourceHint = try c.decode(SourceHint.self, forKey: .sourceHint)
         userSettings = try c.decode(WritingPreferences.self, forKey: .userSettings)
-        customWriterInstructions = try c.decode(String.self, forKey: .customWriterInstructions)
         styleGuide = try c.decodeIfPresent(StyleGuide.self, forKey: .styleGuide)
-        styleProfileID = try c.decode(StyleProfileID.self, forKey: .styleProfileID)
-        profileRevision = try c.decode(String.self, forKey: .profileRevision)
+        styleProfileID = .litil
+        profileRevision = StyleProfileID.litil.revision
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -254,7 +236,6 @@ extension RewriteRequest: Codable {
         try c.encode(nearbyContext, forKey: .nearbyContext)
         try c.encode(sourceHint, forKey: .sourceHint)
         try c.encode(userSettings, forKey: .userSettings)
-        try c.encode(customWriterInstructions, forKey: .customWriterInstructions)
         try c.encodeNullable(styleGuide, forKey: .styleGuide)
         try c.encode(styleProfileID, forKey: .styleProfileID)
         try c.encode(profileRevision, forKey: .profileRevision)

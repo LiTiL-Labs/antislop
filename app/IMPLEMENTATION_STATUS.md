@@ -1,5 +1,7 @@
 # Implementation status
 
+**Current LiTiL revision (September 30):** see [the current revision evidence](evidence/litil-revision.md). The selectable-profile/custom-instruction controls and model dropdowns below are historical. Current code uses the consolidated prompt, capability and sentence-complexity sliders, LiTiL colors/branding and launch-at-login. Live Codex smoke requests now pass on this Mac; the current Claude adapter reports sign-in needed. The remaining content is retained as historical evidence, not a current readiness claim.
+
 Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build and run instructions: [README.md](README.md).
 
 **Bottom line: MVP is not complete.** New real-UI checks on the macOS runner found and fixed a crash that ended the app right after every confirmed replacement (the text itself was always replaced correctly first). The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider and, through each real provider adapter, with stub Claude Code and Codex runtimes. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.

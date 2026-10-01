@@ -13,7 +13,7 @@ final class ContractTests: XCTestCase {
             XCTAssertEqual(try SchemaCheck.validate(req, against: "schemas/rewrite-request.schema.json"), [], "\(c["id"]!)")
             // Re-encoding must keep explicit nulls and every required key.
             let again = try JSONSerialization.jsonObject(with: ContractJSON.encoder().encode(req)) as! [String: Any]
-            XCTAssertEqual(Set(again.keys), Set(raw.keys))
+            XCTAssertEqual(Set(again.keys), Set(raw.keys).subtracting(["custom_writer_instructions"]))
             XCTAssertTrue(((again["nearby_context"] as! [String: Any])["before"] as! [String: Any]).keys.contains("text"))
             XCTAssertEqual(try JSONDecoder().decode(RewriteRequest.self, from: ContractJSON.encoder().encode(req)), req)
         }
@@ -51,9 +51,7 @@ final class ContractTests: XCTestCase {
     }
 
     func testProfileRevisionPairing() {
-        XCTAssertEqual(StyleProfileID.none.revision, "none")
-        XCTAssertEqual(StyleProfileID.noAISlop.revision, "0.2")
-        XCTAssertEqual(StyleProfileID.humanizer.revision, "0.2")
+        XCTAssertEqual(StyleProfileID.litil.revision, "0.3")
     }
 }
 

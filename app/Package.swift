@@ -23,5 +23,6 @@ let package = Package(
         .executableTarget(name: "antislop-eval", dependencies: ["AntiSlopCore"]),
         .executableTarget(name: "antislop-axprobe", dependencies: ["AntiSlopMac", "AntiSlopCore"]),
         .testTarget(name: "AntiSlopCoreTests", dependencies: ["AntiSlopCore"]),
+        .testTarget(name: "AntiSlopMacTests", dependencies: ["AntiSlopMac", "AntiSlopCore"]),
     ]
 )

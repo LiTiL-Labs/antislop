@@ -44,6 +44,8 @@ jobs:
         run: swift test 2>&1 | tee test.log
 
       - name: Assemble app bundle
+        env:
+          SIGN_IDENTITY: "-" # CI fixture build; local releases use the LiTiL certificate.
         run: ./scripts/build-app.sh
 
       - name: Accessibility probe against TextEdit

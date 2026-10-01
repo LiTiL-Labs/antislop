@@ -14,9 +14,7 @@ root = app.parent
 sources = {
     "primary": root / "prompts" / "primary.md",
     "detect": root / "prompts" / "detect.md",
-    "noAISlop": root / "prompts" / "profiles" / "no-ai-slop.md",
-    "humanizer": root / "prompts" / "profiles" / "humanizer.md",
-    # Upstream MIT notices, shown under Acknowledgements.
+    # Upstream MIT notices, retained under Third-party licenses.
     "noAISlopLicense": root / "third_party" / "no-ai-slop" / "LICENSE",
     "humanizerLicense": root / "third_party" / "humanizer" / "LICENSE",
 }

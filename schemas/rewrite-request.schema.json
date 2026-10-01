@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Anti-slop editorial request 0.2",
+  "title": "Anti-slop editorial request 0.3",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.2"
+      "const": "0.3"
     },
     "prompt_version": {
-      "const": "0.2"
+      "const": "0.3"
     },
     "selected_text": {
       "type": "string",
@@ -142,26 +142,19 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "simplify_wording": {
-          "type": "boolean"
-        },
-        "keep_my_tone": {
-          "type": "boolean"
-        },
-        "avoid_em_dashes": {
-          "type": "boolean"
+        "sentence_complexity": {
+          "enum": [
+            "caveman",
+            "plain",
+            "balanced",
+            "polished",
+            "lawyer"
+          ]
         }
       },
       "required": [
-        "simplify_wording",
-        "keep_my_tone",
-        "avoid_em_dashes"
+        "sentence_complexity"
       ]
-    },
-    "custom_writer_instructions": {
-      "type": "string",
-      "minLength": 0,
-      "maxLength": 4000
     },
     "style_guide": {
       "anyOf": [
@@ -191,17 +184,10 @@
       ]
     },
     "style_profile_id": {
-      "enum": [
-        "none",
-        "no-ai-slop",
-        "humanizer"
-      ]
+      "const": "litil"
     },
     "profile_revision": {
-      "enum": [
-        "0.2",
-        "none"
-      ]
+      "const": "0.3"
     }
   },
   "required": [
@@ -212,7 +198,6 @@
     "nearby_context",
     "source_hint",
     "user_settings",
-    "custom_writer_instructions",
     "style_guide",
     "style_profile_id",
     "profile_revision"

@@ -39,7 +39,6 @@ final class AppController: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var settingsWindow: NSWindow?
     var settingsModel: SettingsModel?
-    var acknowledgementsWindow: NSWindow?
     var lastExternalApp: NSRunningApplication?
     var sourceApp: NSRunningApplication?
     var accessTimer: Timer?
@@ -182,9 +181,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "text.badge.checkmark", accessibilityDescription: "Anti-slop")
+            button.image = NSImage(systemSymbolName: "text.badge.checkmark", accessibilityDescription: "Anti-Slop")
+            if button.image == nil { button.title = "AS" }
+            button.setAccessibilityLabel("Anti-Slop menu")
             button.image?.isTemplate = true
-            button.toolTip = "Anti-slop"
+            button.toolTip = "Anti-Slop • LiTiL Labs"
         }
         let menu = NSMenu()
         let rewrite = NSMenuItem(title: "Rewrite Selection", action: #selector(rewriteFromMenu), keyEquivalent: "")
@@ -193,10 +194,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         let check = NSMenuItem(title: "Check Selection for Slop", action: #selector(detectFromMenu), keyEquivalent: "")
         check.target = self
         menu.addItem(check)
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: "Open Anti-Slop Settings…", action: #selector(openSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
-        let ack = NSMenuItem(title: "Acknowledgements", action: #selector(showAcknowledgements), keyEquivalent: "")
+        let ack = NSMenuItem(title: "LiTiL Labs - Law bro edition", action: #selector(openLiTiL), keyEquivalent: "")
         ack.target = self
         menu.addItem(ack)
         menu.addItem(.separator())
@@ -204,6 +205,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         item.menu = menu
         statusItem = item
     }
+
+    @objc func openLiTiL() { NSWorkspace.shared.open(URL(string: "https://litil.ai")!) }
 
     @objc func openSettingsAction() { openSettings() }
     @objc func rewriteFromMenu() { handleTrigger(mode: .rewrite) }
@@ -359,12 +362,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         model.onSignIn = { [weak self] p in self?.signIn(p) }
         model.onCheck = { [weak self] p in self?.checkReadiness(p) }
         model.onLoadModels = { [weak self] p in self?.loadModels(p) }
-        model.onAcknowledgements = { [weak self] in self?.showAcknowledgements() }
         settingsModel = model
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 820),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "Anti-slop"
+        window.title = "Anti-Slop"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.backgroundColor = .white
@@ -419,6 +421,15 @@ final class AppController: NSObject, NSApplicationDelegate {
         panel.triggerKey = new.shortcut
         firstLaunch = false
         settingsNotice = nil
+        if !fixtureMode {
+            do { try LoginItem.apply(new.launchAtLogin) }
+            catch {
+                return "Your writing settings were saved, but macOS couldn't change startup: \(error.localizedDescription) Use Open Login Items to check access, then try Done again."
+            }
+            if new.launchAtLogin && LoginItem.requiresApproval {
+                return "Settings saved. Allow Anti-Slop in macOS Login Items to finish enabling startup."
+            }
+        }
         return nil
     }
 
@@ -483,30 +494,5 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: Acknowledgements
-
-    @objc func showAcknowledgements() {
-        if let w = acknowledgementsWindow {
-            activateAntiSlop()
-            w.makeKeyAndOrderFront(nil)
-            return
-        }
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-                              styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-        window.title = "Acknowledgements"
-        window.isReleasedWhenClosed = false
-        let scroll = NSTextView.scrollableTextView()
-        if let tv = scroll.documentView as? NSTextView {
-            tv.isEditable = false
-            tv.string = Acknowledgements.text
-            tv.font = NSFont.systemFont(ofSize: 12)
-            tv.textContainerInset = NSSize(width: 14, height: 14)
-        }
-        window.contentView = scroll
-        window.center()
-        acknowledgementsWindow = window
-        activateAntiSlop()
-        window.makeKeyAndOrderFront(nil)
-    }
 }
 #endif

@@ -267,8 +267,7 @@ public enum AXProbe {
         let settingsURL = FileManager.default.temporaryDirectory.appendingPathComponent("anti-slop-e2e-settings.json")
         // ⌃⌥⌘J: a combination with no default system meaning.
         let shortcut = ShortcutBinding(keyCode: 0x26, displayLabel: "⌃⌥⌘J", modifiers: [.control, .option, .command])
-        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: liveProvider ?? .claudeCode, shortcut: shortcut,
-                                                                   customWriterInstructions: "Keep it measured."))
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: liveProvider ?? .claudeCode, shortcut: shortcut))
         let exe = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/MacOS/AntiSlop")
         let proc = Process()
         proc.executableURL = exe
@@ -384,7 +383,7 @@ public enum AXProbe {
         }
         func screenText() -> String { elementTexts(app, depth: 30).joined(separator: " | ") }
         func currentKey() -> String {
-            elementTexts(app, depth: 30).first { $0.hasPrefix("Current key:") } ?? "(no current-key label)"
+            elementTexts(app, depth: 30).first { $0.hasPrefix("Current anti-slop key:") } ?? "(no current-key label)"
         }
         NSRunningApplication(processIdentifier: pid)?.activate(options: [])
         try? await Task.sleep(nanoseconds: 500_000_000)
@@ -395,9 +394,9 @@ public enum AXProbe {
         }
         KeyboardEvents.postChord(keyCode: 0x28, flags: [.maskControl, .maskAlternate, .maskCommand]) // ⌃⌥⌘K
         try? await Task.sleep(nanoseconds: 600_000_000)
-        let recorded = screenText().contains("K is ready to use after you choose Done.")
+        let recorded = currentKey().contains("⌃⌥⌘K")
         record("recorder_records_combination", recorded && currentKey().contains("K"),
-               "\(currentKey()); message shown: \(recorded)")
+               "\(currentKey()); assignment shown: \(recorded)")
 
         // Fn/Globe combinations can't be registered on macOS: specific feedback, previous key kept.
         _ = await press("Assign anti-slop key")

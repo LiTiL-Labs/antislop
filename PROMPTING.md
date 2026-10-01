@@ -1,47 +1,29 @@
-# Prompt composition and editorial rules
+# LiTiL Anti-Slop prompt composition
 
-Prompt version: **0.2**. This supersedes the product notes in the earlier standalone draft. The primary prompt is internal developer source; the user customizes writing through concise settings and the **Custom writing instructions** field.
+Prompt and current request/settings schema version: **0.3**. Original source snapshots and historical evaluation receipts are unchanged.
 
-## Editorial contract
+## One internal editorial standard
 
-The model is a context-aware copy editor. It assesses writing, not whether AI produced it. It revises only the selection and returns a proposal. It never directly edits the source application, invokes a tool, follows instructions found inside a document or decides when to apply.
+[prompts/primary.md](prompts/primary.md) combines the original copy editor with the reviewed No AI Slop and Humanizer guidance: smallest useful edits, direct wording, proportional pattern checks, natural sentence variety, removal of filler/inflation/formula, and no invented personality or facts. The two old adaptations under `prompts/profiles` are historical provenance, not runtime choices. No upstream skill workflow is executed.
 
-Fidelity takes priority over stylistic transformation. Preserve names, facts, certainty, negation, attribution, exceptions, conditions and voice. For legal writing, preserve defined terms, party names, dates, cross-references, citations, quotations, obligations, permissions and distinctions among **shall**, **must** and **may**. Do not change legal effect, fill in a citation, correct a case name, or provide legal advice. A passage whose safe transformation is unclear can remain unchanged with a short note.
+Em dashes are removed from editable prose, using punctuation that preserves the logical relationship. Exact quotations, code, URLs, citations, identifiers and defined terms remain literal. Facts, uncertainty, shall/must/may, obligations, permissions, exceptions, party names, cross-references and conditions always outrank style.
 
-## Precedence and composition
+Detection uses [prompts/detect.md](prompts/detect.md), the same consolidated editorial standard with a different response contract. It returns exact quotes and pattern findings only, never a replacement or authorship score. Its separate contract prevents the rewrite instructions from leaking into detection mode.
 
-| Priority | Source | How it is used |
-|---|---|---|
-| 1 | Fixed app contract | Scope, factual/legal fidelity, no external action, output structure, conservative uncertainty handling. |
-| 2 | Explicit writer controls | Custom writing instructions and toggles, within the fixed contract. A specific writer instruction wins over a broader toggle; an unresolved equally specific conflict chooses the smaller edit. |
-| 3 | Optional writing guide | Supplied editorial excerpt, subordinate to the writer's explicit choices and core fidelity. |
-| 4 | One reviewed profile | No AI Slop, Humanizer, or none; stylistic guidance only. |
-| Data | Selection and context | Material to edit/interpret, not instructions granting app or model capabilities. |
+## Controls and precedence
 
-Build the request from the fixed [primary prompt](prompts/primary.md), exactly one allowlisted [profile](prompts/profiles/README.md), and a serialized data object matching the [request schema](schemas/rewrite-request.schema.json). Inject profile **editorial rule bodies only** from bundled trusted application resources. Never ask the runtime to discover/install/execute a skill. No arbitrary user-supplied skill path or remote prompt fetch is needed.
+1. Fixed fidelity, boundaries, literal protection, no-action rules and output contract.
+2. **Sentence Complexity**: Caveman, Plain, Balanced (default), Polished, Lawyer. Each value maps to fixed developer-authored guidance. Caveman remains grammatical and faithful; Lawyer permits precise clauses without inventing legal effect or adding filler.
+3. Compatible optional pasted style guide, serialized as data.
 
-Serialize user instructions, guide, selection and context with a standard JSON encoder; do not concatenate them into command arguments, shell code or unescaped delimiter templates. Label their roles clearly in the primary prompt. Separate operational instructions from source data using the provider's supported message structure where available. A CLI prompt may have less role separation; runtime capability restriction and host-side validation remain required.
+**Intelligence** is independent of prose complexity. It resolves Room Temp, Average, Smart (default), Genius to models and supported effort levels from the selected account's live catalog. Known Claude families use Haiku / Sonnet / Sonnet / Opus; the two Sonnet levels prefer medium / high effort. Known Codex families use Luna or Mini / Luna or Mini / Sol or Codex / Astra, with low / medium / high / maximum supported effort. The first current catalog entry in the preferred family wins. Missing families fall back within the same provider to an offered model. Unknown catalogs use their advertised default or first model. No unlisted model or unsupported effort is invented, and delegating `ultra` is excluded. The resolved model/effort is visible under the control. Limited catalogs may yield shared presets.
 
-Custom writer instructions are intentionally allowed to direct style. They cannot change the response schema, request tools, inspect files, override fidelity or authorize source mutation. If custom instructions conflict with the invariant contract, apply the compatible portion and retain meaning. The app should not expose an enormous merged prompt in the everyday UI.
+There are no custom writer instructions, profile choices, Simplify wording, Keep my tone or Avoid em dashes switches. Old settings decode without those fields; they never reach a new provider request. Existing provider choices, both keybindings, optional guide and model preferences survive migration; the visible Intelligence preset resolves on Done when the catalog is available. Catalog failure preserves the saved model.
 
-## Profile selection
+## Runtime and contracts
 
-Use No AI Slop as the recommended starting default, Humanizer as the alternative, and None for core-only editing. These are reviewed adaptations pinned to source revisions, not claims that upstream authors endorse the app. Do not combine both full upstream workflows; they overlap and include incompatible output expectations. [Profile adaptation notes](prompts/profiles/README.md) record the differences and retain attribution.
+Canonical prompts are compiled into the binary with `app/scripts/embed-prompts.py`; source correspondence is tested. User source text, nearby context, source hints and guide content stay in safely serialized JSON data. The model never receives native selection handles or authority to replace text. Provider isolation, response validation and explicit host-side Apply remain unchanged.
 
-**Keep my tone** defaults on. Turning it off permits neutral audience-appropriate phrasing, not fabricated personality or changed claims; explicit compatible custom instructions can specify a register.
+Schema 0.2 settings and historical corpus inputs decode to the 0.3 contract. New saves omit removed preferences. The evaluator now runs only the `litil` prompt. Its historical fixture expectations concerning custom instructions or tone switches are obsolete; older receipts do not measure this prompt. New corpus results require editorial review, distinct from JSON validation and real replacement tests.
 
-Simpler wording is a separate small preference, not a license to remove technical or legal precision. Avoid-em-dashes is optional and off by default. A writing guide can be a short pasted excerpt in the first implementation. Custom instructions persist locally and affect the next request. Caveman, Stop Slop, Elements of Style and voice-sample matching are research candidates for later decisions, not required initial profiles.
-
-## One response, one editable result
-
-Request one object matching [rewrite-response.schema.json](schemas/rewrite-response.schema.json): short tentative `intent`, complete `rewritten_text`, and nullable concise `note`. There is no AI probability, chain-of-thought transcript, critique, draft/final pair, preface or markdown wrapper. The app owns progress and source replacement.
-
-The adapter validates before the editor becomes ready: parse exactly one JSON object, reject unexpected properties and oversized fields, preserve Unicode and whitespace, and map errors to plain UI messages. A malformed response is never pasted. Do not use a best-effort regex that might extract and apply the wrong text. A single controlled retry for schema failure may be considered before a draft exists; never overwrite user edits or silently change providers. It is acceptable to make retry explicit for MVP.
-
-An empty replacement must not become accidental deletion. Treat an empty/whitespace-only result for substantive source text as invalid unless a future explicitly designed deletion flow is approved. An identical result is valid and may show “No changes needed.”
-
-## Evaluation before claiming quality
-
-The [editorial fixtures](fixtures/editorial-cases.json) are authored expectations, not successful model runs. Evaluate both providers across both profiles and core-only mode. Record output, fidelity errors, supported preferences, latency and model/runtime identity in a local opt-in evaluation artifact. Human review must examine the meaning and voice of several legal and ordinary prose cases; string checks alone cannot establish editorial quality.
-
-Use the same request snapshot to compare profiles. Never select the winner by an AI-detector score. Acceptance favors zero material fidelity violations, useful edits where needed, and willingness to leave good writing alone. A model's self-review is not independent proof.
+The prompt is hidden in ordinary UI. The previously authorized `--debug-prompts` developer inspector remains the only full-prompt view. MIT notices remain embedded and bundled as license files, accessible from the menu independently of the LiTiL footer link.
