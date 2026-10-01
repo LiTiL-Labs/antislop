@@ -46,6 +46,9 @@ public final class SessionCoordinator {
     public var onChange: (() -> Void)?
     /// Sanitized diagnostics sink (operation, duration, outcome class only).
     public var diagnostics: ((String) -> Void)?
+    /// Developer inspector (`--debug-prompts`): when set, every provider request
+    /// carries a `RequestTrace`, handed here before the request starts.
+    public var onTrace: ((RequestTrace) -> Void)?
 
     let capturer: SelectionCapturing
     let replacer: TextReplacing
@@ -73,20 +76,35 @@ public final class SessionCoordinator {
         return !s.phase.isTerminal
     }
 
-    /// Assigned key pressed (or menu "Rewrite Selection").
-    public func trigger() -> TriggerResult {
+    /// Assigned key pressed (or menu "Rewrite Selection" / "Check for Slop").
+    public func trigger(mode: SessionMode = .rewrite) -> TriggerResult {
         if isActive { return .focusExisting }
         switch capturer.captureFocusedSelection() {
         case .failure(let refusal):
             diagnostics?("capture refused: \(refusal)")
             return .refused(refusal)
         case .success(let snap):
-            let s = RewriteSession(capture: snap.captured)
+            let s = RewriteSession(capture: snap.captured, mode: mode)
             session = s
             snapshot = snap
             startGeneration(s)
             return .started
         }
+    }
+
+    /// From a detection session, rewrite the same captured selection. The original
+    /// capture and target evidence are kept, so apply still revalidates that exact
+    /// selection. Returns false when there is no detection session to convert.
+    @discardableResult
+    public func switchToRewrite() -> Bool {
+        guard let current = session, current.mode == .detect, snapshot != nil else { return false }
+        work?.cancel()
+        work = nil
+        current.cancel()
+        let s = RewriteSession(capture: current.capture, mode: .rewrite)
+        session = s
+        startGeneration(s)
+        return true
     }
 
     /// Explicit retry after a provider failure, before any user edit.
@@ -99,9 +117,9 @@ public final class SessionCoordinator {
         guard let g = s.beginGeneration() else { return }
         // Settings are snapshotted per request; later changes affect the next rewrite.
         let current = settings()
-        let composed: ComposedRequest
+        var composed: ComposedRequest
         do {
-            composed = try PromptComposer.compose(capture: s.capture, settings: current)
+            composed = try PromptComposer.compose(capture: s.capture, settings: current, mode: s.mode)
         } catch let e as CompositionError {
             s.compositionFailed(e)
             onChange?()
@@ -112,14 +130,26 @@ public final class SessionCoordinator {
             return
         }
         let p = provider(current.providerID)
+        if let onTrace {
+            let trace = RequestTrace(mode: s.mode, provider: p.isFixture ? "fixture" : p.id.displayName,
+                                     instructions: composed.instructions, dataMessage: composed.dataMessage,
+                                     model: composed.model, reasoning: composed.reasoning)
+            composed.trace = trace
+            onTrace(trace)
+        }
+        let trace = composed.trace
         let sessionID = s.id
         let timeout = self.timeout
         onChange?()
         let started = Date()
+        let mode = s.mode
         work = Task { [weak self] in
-            let outcome: Result<ProviderRewrite, ProviderFailure>
+            let outcome: Result<ProviderResult, ProviderFailure>
             do {
-                outcome = .success(try await p.rewrite(composed, timeout: timeout))
+                switch mode {
+                case .rewrite: outcome = .success(.rewrite(try await p.rewrite(composed, timeout: timeout)))
+                case .detect: outcome = .success(.detection(try await p.detect(composed, timeout: timeout)))
+                }
             } catch let f as ProviderFailure {
                 outcome = .failure(f)
             } catch is CancellationError {
@@ -127,16 +157,23 @@ public final class SessionCoordinator {
             } catch {
                 outcome = .failure(.runtimeError(p.id, "unexpected error"))
             }
+            switch outcome {
+            case .success: trace?.finish(outcome: "Accepted")
+            case .failure(let f): trace?.finish(outcome: "Failed: \(f.diagnosticClass)")
+            }
             await MainActor.run {
                 guard let self, let live = self.session, live.id == sessionID else { return }
                 let ms = Int(Date().timeIntervalSince(started) * 1000)
                 switch outcome {
-                case .success(let r):
+                case .success(.rewrite(let r)):
                     let accepted = live.receive(r, generation: g, fixture: p.isFixture)
                     self.diagnostics?("rewrite \(p.id.rawValue) ok \(ms)ms accepted=\(accepted)")
+                case .success(.detection(let d)):
+                    let accepted = live.receive(d, generation: g, fixture: p.isFixture)
+                    self.diagnostics?("detect \(p.id.rawValue) ok \(ms)ms findings=\(d.response.findings.count) dropped=\(d.response.droppedFindings) accepted=\(accepted)")
                 case .failure(let f):
                     live.receive(failure: f, generation: g)
-                    self.diagnostics?("rewrite \(p.id.rawValue) failed \(f.diagnosticClass) \(ms)ms")
+                    self.diagnostics?("\(mode.rawValue) \(p.id.rawValue) failed \(f.diagnosticClass) \(ms)ms")
                 }
                 self.onChange?()
             }
@@ -203,4 +240,9 @@ public final class SessionCoordinator {
         case .uncertain: return "uncertain"
         }
     }
+}
+
+private enum ProviderResult {
+    case rewrite(ProviderRewrite)
+    case detection(ProviderDetection)
 }

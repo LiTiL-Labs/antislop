@@ -107,9 +107,7 @@ final class SettingsTests: XCTestCase {
         let s = AppSettings(
             providerID: .codex,
             shortcut: ShortcutBinding(keyCode: 0x03, displayLabel: "⌃⌥F", modifiers: [.option, .control]),
-            styleProfileID: .humanizer,
-            writingPreferences: WritingPreferences(simplifyWording: true, keepMyTone: false, avoidEmDashes: true),
-            customWriterInstructions: "Keep it direct.\nNo exclamation marks.",
+            writingPreferences: WritingPreferences(sentenceComplexity: .lawyer),
             styleGuide: StyleGuide(label: "Firm style", text: "Use “Agreement” for the defined term.")
         )
         try store.save(s)
@@ -131,10 +129,8 @@ final class SettingsTests: XCTestCase {
 
     func testDefaultsMatchUX() {
         let s = AppSettings.firstLaunch(provider: .claudeCode)
-        XCTAssertEqual(s.styleProfileID, .noAISlop)
-        XCTAssertFalse(s.writingPreferences.simplifyWording)
-        XCTAssertTrue(s.writingPreferences.keepMyTone)
-        XCTAssertFalse(s.writingPreferences.avoidEmDashes)
+        XCTAssertEqual(s.writingPreferences.sentenceComplexity, .balanced)
+        XCTAssertTrue(s.launchAtLogin)
         XCTAssertNil(s.shortcut)
         XCTAssertEqual(AppSettings.firstLaunchProvider(ready: [.codex]), .codex)
         XCTAssertEqual(AppSettings.firstLaunchProvider(ready: [.claudeCode]), .claudeCode)
@@ -144,13 +140,10 @@ final class SettingsTests: XCTestCase {
 
     func testValidatorFlagsLimitsWithoutTruncating() {
         var s = AppSettings(providerID: .claudeCode)
-        s.customWriterInstructions = String(repeating: "x", count: Limits.customInstructions + 1)
         s.styleGuide = StyleGuide(label: "", text: " ")
         let issues = SettingsValidator.issues(in: s)
-        XCTAssertTrue(issues.contains(.customInstructionsTooLong(count: Limits.customInstructions + 1)))
         XCTAssertTrue(issues.contains(.guideLabelMissing))
         XCTAssertTrue(issues.contains(.guideTextMissing))
-        XCTAssertEqual(s.customWriterInstructions.count, Limits.customInstructions + 1)
         XCTAssertEqual(SettingsValidator.issues(in: AppSettings(providerID: .codex)), [])
     }
 }

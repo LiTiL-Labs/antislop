@@ -211,18 +211,18 @@ final class CoordinatorTests: XCTestCase {
     /// A16 / UX: settings are snapshotted per request; a change affects the next rewrite.
     func testSettingsChangeAffectsOnlyTheNextRequest() async {
         let fixture = FixtureProvider(delay: 0.05)
-        settings.customWriterInstructions = "First preference."
+        settings.writingPreferences.sentenceComplexity = .plain
         let (c, _, _) = make(fixture)
         _ = c.trigger()
-        settings.customWriterInstructions = "Second preference."
+        settings.writingPreferences.sentenceComplexity = .lawyer
         await waitFor(c) { $0 == .ready }
         let draft = c.session?.draft
-        XCTAssertEqual(fixture.requests.last?.request.customWriterInstructions, "First preference.")
+        XCTAssertEqual(fixture.requests.last?.request.userSettings.sentenceComplexity, .plain)
         XCTAssertEqual(c.session?.draft, draft, "no silent regeneration")
         c.clear()
         _ = c.trigger()
         await waitFor(c) { $0 == .ready }
-        XCTAssertEqual(fixture.requests.last?.request.customWriterInstructions, "Second preference.")
+        XCTAssertEqual(fixture.requests.last?.request.userSettings.sentenceComplexity, .lawyer)
     }
 
     /// A34: malformed output is never inserted and no provider switch happens.
@@ -259,7 +259,7 @@ final class CoordinatorTests: XCTestCase {
         let fixture = FixtureProvider(delay: 0.01)
         let rep = StubReplacer()
         let c = SessionCoordinator(capturer: StubCapturer(.success(snapshot(secret))), replacer: rep,
-                                   settings: { AppSettings(providerID: .claudeCode, customWriterInstructions: "Secret style note") },
+                                   settings: { AppSettings(providerID: .claudeCode, styleGuide: StyleGuide(label: "Private", text: "Secret style note")) },
                                    provider: { _ in fixture }, timeout: 5)
         var lines: [String] = []
         c.diagnostics = { lines.append($0) }
@@ -469,7 +469,8 @@ final class ShortcutAdvisorTests: XCTestCase {
 
     /// A05: real restrictions and known conflicts are explained, never remapped.
     func testRestrictionsAndConflicts() {
-        XCTAssertNotNil(ShortcutAdvisor.assess(b(0x38, []), systemHotKeys: []).blocking)
+        XCTAssertNotNil(ShortcutAdvisor.assess(b(0x38, [.command]), systemHotKeys: []).blocking,
+                        "a modifier key is either alone or paired with an ordinary key")
         XCTAssertNotNil(ShortcutAdvisor.assess(b(0x30, [.command]), systemHotKeys: []).blocking)
         XCTAssertNotNil(ShortcutAdvisor.assess(b(0x00, [.function], "a"), systemHotKeys: []).blocking)
         let spotlight = SystemHotKey(id: 64, keyCode: 0x31, modifiers: [.command])

@@ -35,6 +35,14 @@ public struct ShortcutBinding: Codable, Equatable, Hashable, Sendable {
 
     public var modifierSet: Set<ShortcutModifier> { Set(modifiers) }
 
+    /// A modifier key pressed and released on its own (e.g. Right ⌥, Fn, Caps Lock).
+    public var isLoneModifier: Bool { KeyCodes.modifierOnly.contains(keyCode) && modifiers.isEmpty }
+
+    /// Same physical trigger, regardless of label or enabled state.
+    public func sameKey(as other: ShortcutBinding) -> Bool {
+        keyCode == other.keyCode && modifierSet == other.modifierSet
+    }
+
     enum CodingKeys: String, CodingKey {
         case keyCode = "key_code"
         case displayLabel = "display_label"
@@ -47,24 +55,30 @@ public struct AppSettings: Equatable, Sendable {
     public var schemaVersion: String = ContractVersion.schema
     public var providerID: ProviderID
     public var shortcut: ShortcutBinding?
-    public var styleProfileID: StyleProfileID
+    /// Second, independent key for slop-detection mode.
+    public var detectShortcut: ShortcutBinding?
     public var writingPreferences: WritingPreferences
-    public var customWriterInstructions: String
+    public var intelligence: [ProviderID: Intelligence] = [:]
+    public var launchAtLogin: Bool = true
     public var styleGuide: StyleGuide?
+    /// Model and reasoning choice per connection; absent means the runtime default.
+    public var modelPreferences: [ProviderID: ModelPreference] = [:]
+
+    public func modelPreference(for p: ProviderID) -> ModelPreference {
+        modelPreferences[p] ?? .runtimeDefault
+    }
 
     public init(
         providerID: ProviderID,
         shortcut: ShortcutBinding? = nil,
-        styleProfileID: StyleProfileID = .noAISlop,
+        detectShortcut: ShortcutBinding? = nil,
         writingPreferences: WritingPreferences = .defaults,
-        customWriterInstructions: String = "",
         styleGuide: StyleGuide? = nil
     ) {
         self.providerID = providerID
         self.shortcut = shortcut
-        self.styleProfileID = styleProfileID
+        self.detectShortcut = detectShortcut
         self.writingPreferences = writingPreferences
-        self.customWriterInstructions = customWriterInstructions
         self.styleGuide = styleGuide
     }
 
@@ -88,50 +102,66 @@ extension AppSettings: Codable {
         case schemaVersion = "schema_version"
         case providerID = "provider_id"
         case shortcut
-        case styleProfileID = "style_profile_id"
+        case detectShortcut = "detect_shortcut"
         case writingPreferences = "writing_preferences"
-        case customWriterInstructions = "custom_writer_instructions"
         case styleGuide = "style_guide"
+        case modelPreferences = "model_preferences"
+        case launchAtLogin = "launch_at_login"
+        case intelligence
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try c.decode(String.self, forKey: .schemaVersion)
+        let version = try c.decode(String.self, forKey: .schemaVersion)
+        guard version == "0.2" || version == ContractVersion.schema else {
+            throw DecodingError.dataCorruptedError(forKey: .schemaVersion, in: c, debugDescription: "Unsupported settings version")
+        }
+        schemaVersion = ContractVersion.schema
         providerID = try c.decode(ProviderID.self, forKey: .providerID)
         shortcut = try c.decodeIfPresent(ShortcutBinding.self, forKey: .shortcut)
-        styleProfileID = try c.decode(StyleProfileID.self, forKey: .styleProfileID)
+        // Absent in settings saved before slop-detection mode existed.
+        detectShortcut = try c.decodeIfPresent(ShortcutBinding.self, forKey: .detectShortcut)
         writingPreferences = try c.decode(WritingPreferences.self, forKey: .writingPreferences)
-        customWriterInstructions = try c.decode(String.self, forKey: .customWriterInstructions)
         styleGuide = try c.decodeIfPresent(StyleGuide.self, forKey: .styleGuide)
+        let tiers = try c.decodeIfPresent([String: Intelligence].self, forKey: .intelligence) ?? [:]
+        intelligence = Dictionary(uniqueKeysWithValues: tiers.compactMap { k, v in ProviderID(rawValue: k).map { ($0, v) } })
+        launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? true
+        // Absent in settings saved before model selection existed. Unknown provider keys are ignored.
+        let raw = try c.decodeIfPresent([String: ModelPreference].self, forKey: .modelPreferences) ?? [:]
+        modelPreferences = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in ProviderID(rawValue: k).map { ($0, v) } })
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(Dictionary(uniqueKeysWithValues: intelligence.map { ($0.key.rawValue, $0.value) }), forKey: .intelligence)
+        try c.encode(launchAtLogin, forKey: .launchAtLogin)
         try c.encode(schemaVersion, forKey: .schemaVersion)
         try c.encode(providerID, forKey: .providerID)
         try c.encodeNullable(shortcut, forKey: .shortcut)
-        try c.encode(styleProfileID, forKey: .styleProfileID)
+        try c.encodeNullable(detectShortcut, forKey: .detectShortcut)
         try c.encode(writingPreferences, forKey: .writingPreferences)
-        try c.encode(customWriterInstructions, forKey: .customWriterInstructions)
         try c.encodeNullable(styleGuide, forKey: .styleGuide)
+        let raw = Dictionary(uniqueKeysWithValues: modelPreferences.filter { $0.value != .runtimeDefault }.map { ($0.key.rawValue, $0.value) })
+        try c.encode(raw, forKey: .modelPreferences)
     }
 }
 
 public enum SettingsIssue: Equatable, Sendable {
-    case customInstructionsTooLong(count: Int)
     case guideLabelMissing
     case guideLabelTooLong(count: Int)
     case guideTextMissing
     case guideTextTooLong(count: Int)
     case shortcutLabelInvalid
+    case shortcutsCollide
+    case modelChoiceInvalid
 
     public var message: String {
         switch self {
-        case .customInstructionsTooLong(let n):
-            return "Custom writing instructions are \(n) characters; the limit is \(Limits.customInstructions)."
         case .guideLabelMissing: return "Give the writing guide a short name."
         case .guideLabelTooLong(let n): return "Guide name is \(n) characters; the limit is \(Limits.guideLabel)."
         case .guideTextMissing: return "Paste the guide excerpt, or remove the guide."
         case .guideTextTooLong(let n): return "Guide excerpt is \(n) characters; the limit is \(Limits.guideText)."
         case .shortcutLabelInvalid: return "The recorded key has no usable label. Record it again."
+        case .shortcutsCollide: return "The anti-slop key and the slop-detection key must be different."
+        case .modelChoiceInvalid: return "The saved model or reasoning level isn't a valid name. Choose it again."
         }
     }
 }
@@ -140,8 +170,6 @@ public enum SettingsValidator {
     /// Validation applied on Done. Nothing is truncated to make settings pass.
     public static func issues(in s: AppSettings) -> [SettingsIssue] {
         var out: [SettingsIssue] = []
-        let n = s.customWriterInstructions.codePointCount
-        if n > Limits.customInstructions { out.append(.customInstructionsTooLong(count: n)) }
         if let g = s.styleGuide {
             let label = g.label.trimmingCharacters(in: .whitespacesAndNewlines)
             if label.isEmpty { out.append(.guideLabelMissing) }
@@ -149,9 +177,11 @@ public enum SettingsValidator {
             if g.text.isBlank { out.append(.guideTextMissing) }
             if g.text.codePointCount > Limits.guideText { out.append(.guideTextTooLong(count: g.text.codePointCount)) }
         }
-        if let k = s.shortcut {
-            if k.displayLabel.isEmpty || k.displayLabel.codePointCount > 80 { out.append(.shortcutLabelInvalid) }
+        for k in [s.shortcut, s.detectShortcut].compactMap({ $0 }) {
+            if k.displayLabel.isEmpty || k.displayLabel.codePointCount > 80 { out.append(.shortcutLabelInvalid); break }
         }
+        if let a = s.shortcut, let b = s.detectShortcut, a.sameKey(as: b) { out.append(.shortcutsCollide) }
+        if s.modelPreferences.values.contains(where: { !$0.isValid }) { out.append(.modelChoiceInvalid) }
         return out
     }
 }
@@ -161,7 +191,7 @@ public enum SettingsLoadResult: Equatable, Sendable {
     case firstLaunch
     case loaded(AppSettings)
     /// The file could not be read as current settings. It was moved aside, not
-    /// deleted, so writer instructions and keys can be recovered by hand.
+    /// deleted, so prior preferences and keys can be recovered by hand.
     case unreadable(preservedAt: String)
 }
 

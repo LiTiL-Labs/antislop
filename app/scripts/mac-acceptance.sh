@@ -4,7 +4,7 @@
 # app/evidence/mac/<timestamp>/. Send that folder (or the printed summary) back.
 #
 #   cd app && ./scripts/mac-acceptance.sh                 # default run
-#   ./scripts/mac-acceptance.sh --claude-corpus           # also rerun the 54-case Claude corpus on this Mac
+#   ./scripts/mac-acceptance.sh --claude-corpus           # also rerun the 18-case Claude corpus on this Mac
 #
 # Before running:
 #   - Quit TextEdit (save your documents first). The probe opens its own temporary files.
@@ -72,7 +72,7 @@ step "Live end to end: Codex in the real app"
   --out "$OUT/e2e-codex.json" 2>&1 | tee -a "$LOG"
 quit_textedit
 
-step "Codex editorial corpus (18 cases x 3 profiles)"
+step "Codex editorial corpus (18 cases x consolidated LiTiL prompt)"
 "$BIN/antislop-eval" corpus --provider codex --fixtures ../fixtures/editorial-cases.json \
   --out "$OUT/codex-corpus.json" 2>&1 | tee -a "$LOG"
 

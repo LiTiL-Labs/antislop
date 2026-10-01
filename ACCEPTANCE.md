@@ -1,5 +1,19 @@
 # Acceptance and proof requirements
 
+## Current product revision — September 30, 2026
+
+The LiTiL Labs revision supersedes the historical profile/custom-instruction/model-control descriptions below. The implemented app lives in `app/`; this is no longer a specification-only checkout.
+
+- One hidden LiTiL Anti-Slop prompt combines the original editor with reviewed No AI Slop and Humanizer guidance. There are no selectable profiles or custom writer instructions. Em-dash removal is always on for editable prose; protected literals and legal meaning remain intact.
+- **Intelligence** chooses supported provider model/effort presets: Room Temp, Average, Smart, Genius. **Sentence Complexity** independently chooses Caveman, Plain, Balanced, Polished, Lawyer. These replace raw model/reasoning controls and Simplify wording/Keep my tone.
+- Sliders use their native theme below maximum. Genius adds a button-green track, stronger bloom and pixels, and a highlighted box; Lawyer uses orange. At maximum, color and effects fade from 50% alpha on the left to 100% on the right. Native thumbs stay centered and unclipped, and Reduce Motion removes particles. Screen titles use exact orange `#ED692B`; primary buttons use user-specified dark green `#102D23`.
+- The **Anti-Slop** Settings title stays pinned above the scrolling controls, just as Done stays pinned below. A resident menu-bar entry reopens Settings. **Launch at login** defaults on and registers through macOS when Done saves settings; registration failures and required OS approval remain visible.
+- The Settings footer links **LiTiL Labs - Law bro edition** to `https://litil.ai`. Unchanged MIT notices remain bundled as files; the licenses menu item and window are removed.
+- The two keybindings, exact original selection identity, explicit Apply, provider-owned authentication, legal fidelity and no-tool runtime restrictions remain required.
+
+See [app/README.md](app/README.md), [PROMPTING.md](PROMPTING.md) and [app/evidence/litil-revision.md](app/evidence/litil-revision.md) for current behavior and evidence. Historical requirements below apply only where compatible with this revision.
+
+
 All product checks below are **not run in this handoff**. The package includes plans, source snapshots, schemas, fixtures and comps only. Change each check's status only after recording the relevant evidence. Preserve the distinction between automated/fixture proof, a live provider request, real cross-app behavior and human acceptance.
 
 ## Functional acceptance matrix
@@ -33,7 +47,7 @@ All product checks below are **not run in this handoff**. The package includes p
 | A25 | Generating or applying | Apply disabled; truthful status; no invented percent or intent stage | State + UI |
 | A26 | User edits preview; delayed or stale provider event arrives | User edits remain; stale event discarded | Automated state |
 | A27 | Escape/close; settings open; duplicate trigger | No source mutation; cancellation blocks late results; settings preserves useful draft; no duplicate panels | State + real UI |
-| A28 | Explicit Anti-slop/Command-Return while ready | Final edited contents used once; Return alone adds newline. For substantive source, empty/whitespace-only editor buffer disables apply with concise feedback and is rejected again immediately before mutation. | State + real UI |
+| A28 | Explicit Anti-slop button or the anti-slop key pressed in the panel while ready (Command-Return without a key) | Final edited contents used once; Return alone adds newline. For substantive source, empty/whitespace-only editor buffer disables apply with concise feedback and is rejected again immediately before mutation. | State + real UI |
 | A29 | Original source changes/closes or another field gains focus | Apply blocks; no paste into unrelated field; draft retained | Real adversarial interaction |
 | A30 | Verified apply succeeds | Only original selection changes, surrounding text intact, panel closes after verification | Real source |
 | A31 | Apply fails or completion is uncertain | Draft retained, honest recovery, no automatic duplicate paste | Stub + real failure |

@@ -1,4 +1,6 @@
-# Reviewed style profiles
+# Historical reviewed style profiles
+
+**Superseded September 30, 2026:** the application now uses the consolidated [LiTiL primary prompt](../primary.md). These adaptations remain as provenance; they are neither selected nor embedded at runtime. The source snapshots and MIT notices are unchanged. The following documents the original two-profile design.
 
 These short application profiles are adaptations for a selected-text copy editor. They are not globally installed agent skills. The app's primary prompt and output schema govern every profile. Bundle exactly one rule body per request, or none. The reviewed profile version is `0.2` and is independent of upstream commit/version.
 

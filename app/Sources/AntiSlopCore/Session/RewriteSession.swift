@@ -40,15 +40,18 @@ public enum ApplyAvailability: Equatable, Sendable {
     case disabled(reason: String?)
 }
 
-/// One selection, one proposal, one apply. Owns identity, generation and edit
+/// One selection, one proposal, one apply. A detection-mode session is the same
+/// lifecycle with findings instead of a proposal, and it can never apply. Owns identity, generation and edit
 /// revisions so a late provider result can never overwrite the user's edits and
 /// nothing mutates the source except an explicit apply.
 public final class RewriteSession {
     public let id = UUID()
     public let capture: CapturedText
+    public let mode: SessionMode
     public private(set) var phase: SessionPhase
     public private(set) var generation = 0
     public private(set) var proposal: RewriteResponse?
+    public private(set) var detection: DetectionResponse?
     public private(set) var draft = ""
     public private(set) var draftRevision = 0
     public private(set) var userHasEdited = false
@@ -57,8 +60,9 @@ public final class RewriteSession {
     public private(set) var usedFixture = false
     private var applyAttempted = false
 
-    public init(capture: CapturedText) {
+    public init(capture: CapturedText, mode: SessionMode = .rewrite) {
         self.capture = capture
+        self.mode = mode
         self.phase = .generating
     }
 
@@ -92,12 +96,23 @@ public final class RewriteSession {
     /// a live session and the user has not taken ownership of the draft.
     @discardableResult
     public func receive(_ result: ProviderRewrite, generation g: Int, fixture: Bool = false) -> Bool {
-        guard g == generation, phase == .generating, !userHasEdited else { return false }
+        guard mode == .rewrite, g == generation, phase == .generating, !userHasEdited else { return false }
         proposal = result.response
         receipt = result.receipt
         usedFixture = fixture
         draft = result.response.rewrittenText
         draftRevision += 1
+        phase = .ready
+        return true
+    }
+
+    /// Accept detection findings for the current generation of a live detection session.
+    @discardableResult
+    public func receive(_ result: ProviderDetection, generation g: Int, fixture: Bool = false) -> Bool {
+        guard mode == .detect, g == generation, phase == .generating else { return false }
+        detection = result.response
+        receipt = result.receipt
+        usedFixture = fixture
         phase = .ready
         return true
     }
@@ -124,6 +139,7 @@ public final class RewriteSession {
     }
 
     public var applyAvailability: ApplyAvailability {
+        if mode == .detect { return .disabled(reason: nil) }
         guard phase == .ready else {
             switch phase {
             case .generating: return .disabled(reason: nil)
@@ -173,7 +189,7 @@ public final class RewriteSession {
         phase = .cancelled
     }
 
-    static func singleLine(_ s: String, limit: Int) -> String {
+    public static func singleLine(_ s: String, limit: Int) -> String {
         let one = s.components(separatedBy: .newlines).joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return one.isEmpty ? "Context unclear" : one.prefixCodePoints(limit)
     }

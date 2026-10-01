@@ -21,14 +21,15 @@ enum Theme {
               blue: Double(hex & 0xFF) / 255, opacity: alpha)
     }
 
-    static let shell = rgb(0xF7F6F3)
-    static let shellNS = NSColor(srgbRed: 0xF7 / 255, green: 0xF6 / 255, blue: 0xF3 / 255, alpha: 1)
+    static let shell = rgb(0xFCFBF9)
+    static let shellNS = NSColor(srgbRed: 0xFC / 255, green: 0xFB / 255, blue: 0xF9 / 255, alpha: 1)
     static let editor = Color.white
     static let primaryText = rgb(0x232322)
     static let secondaryText = rgb(0x656563)
     static let border = rgb(0x232322, 0.12)
     static let statusFill = rgb(0xEDECE8)
-    static let action = rgb(0x1F1F1E)
+    static let orange = rgb(0xED692B)
+    static let action = rgb(0x102D23)
     static let actionDisabled = rgb(0xD9D8D4)
     static let ready = rgb(0x2E9D4F)
     static let warning = rgb(0xB5651D)

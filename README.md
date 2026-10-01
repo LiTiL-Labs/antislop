@@ -1,43 +1,30 @@
-# Anti-slop — development handoff
+# Anti-Slop · LiTiL Labs
 
-Package version 0.2.1 · September 28, 2026 · Project label: **Anti Slop Button**
+A native macOS menu-bar app for editing selected plain text. Select text in another app, press your rewrite key, review or edit the proposal, then press the key again or **Anti-slop** to replace that exact selection. A separate detection key lists quoted writing-pattern findings without changing the source.
 
-Build a small Mac app that rewrites selected text in place. A user selects text in another app, presses a personally assigned key, reviews or edits a context-aware proposal in a floating panel, and presses **Anti-slop** to replace only that selection with plain text.
+The implementation is in [app](app/README.md). Build locally with:
 
-**Codex and Claude Code are both required first-release AI connections**, using supported local runtimes and the user's own normal account sign-in. Legal professionals are an important target audience, so preserved obligations, defined terms and qualifications are acceptance requirements.
+```sh
+cd app
+./scripts/build-app.sh
+open build/Anti-slop.app
+```
 
-This package is the development specification. It contains no working app and makes no claim of a successful live provider request or cross-app replacement. Screens are visual concepts. Fixtures define intended behavior, not measured model results. See [validation status](validation/STATUS.md).
+App builds use the local **Developer ID Application: LiTiL Labs, Inc. (5N876P35QC)** certificate by default and verify the signature. See [build instructions](app/README.md) for explicit signing overrides.
 
-## Start here
+Settings is also onboarding. Choose Codex or Claude Code, assign both keys, set **Intelligence** (AI capability) and **Sentence Complexity** (prose), and choose Done. **Launch at login** defaults on; macOS owns registration and approval. The resident menu-bar icon always offers Settings.
 
-1. [DEVELOPMENT_HANDOFF.md](DEVELOPMENT_HANDOFF.md): self-contained execution brief and first deliverable.
-2. [SPEC.md](SPEC.md): product requirements and boundaries.
-3. [UX.md](UX.md): panel, settings, shortcut assignment, visual treatment, motion and recovery.
-4. [ARCHITECTURE.md](ARCHITECTURE.md): recommended native architecture and safety of replacement.
-5. [PROMPTING.md](PROMPTING.md): internal prompt, custom instructions and selectable profiles.
-6. [IMPLEMENTATION.md](IMPLEMENTATION.md) and [ACCEPTANCE.md](ACCEPTANCE.md): runnable slices and proof requirements.
+A single hidden LiTiL Anti-Slop prompt combines the original editor and reviewed No AI Slop/Humanizer guidance. Em-dash removal is constant, with factual/legal fidelity and protected literal content taking precedence. No profile selector or custom writing instructions remain. An optional pasted style guide remains supported.
 
-The latest decisions are explicit: one settings screen is onboarding; **Custom writing instructions** is the user-facing customization field; the core prompt remains internal; **Assign anti-slop key** records the user's chosen supported single key or combination; generic plain text comes first. [DECISIONS.md](DECISIONS.md) records superseded concepts so they do not return during implementation.
+Intelligence presets are Room Temp, Average, Smart and Genius. Sentence Complexity runs Caveman, Plain, Balanced, Polished and Lawyer. Genius has a green bloom and pixels; Lawyer has the same effect in orange. Titles use `#ED692B` and primary buttons use `#102D23`.
 
-For Claude Code, [CLAUDE.md](CLAUDE.md) imports the shared [AGENTS.md](AGENTS.md) instructions directly. The development brief is coding-agent-neutral; Codex and Claude Code remain equally required AI connections in the app. This packaging-only update leaves prompt/schema version 0.2 and all product requirements unchanged.
+Both providers use their official local runtime and provider-owned account sign-in. The model only proposes text; native code owns the captured selection and validated explicit replacement. No API-token extraction, tool execution from source material, file mode, rich-format promise, analytics or cloud service is included.
 
-## Package map
+- [Current decisions](DECISIONS.md)
+- [Prompt composition](PROMPTING.md)
+- [Architecture and safety](ARCHITECTURE.md)
+- [Current revision evidence](app/evidence/litil-revision.md)
+- [Implementation history](app/IMPLEMENTATION_STATUS.md)
+- [Pinned sources and licenses](third_party/PROVENANCE.md)
 
-| Location | Purpose |
-|---|---|
-| [AGENTS.md](AGENTS.md) | Shared project-specific implementation constraints |
-| [CLAUDE.md](CLAUDE.md) | Claude Code entrypoint importing the shared instructions |
-| [prompts/primary.md](prompts/primary.md) | Versioned internal copy-editor instructions |
-| [prompts/profiles/README.md](prompts/profiles/README.md) | Profile selection, adaptation and provenance |
-| [prompts/profiles/no-ai-slop.md](prompts/profiles/no-ai-slop.md) | Light-edit default profile |
-| [prompts/profiles/humanizer.md](prompts/profiles/humanizer.md) | Alternative pattern-review profile |
-| [schemas/README.md](schemas/README.md) | Proposed portable contracts and examples |
-| [fixtures/README.md](fixtures/README.md) | Representative editorial and interaction cases |
-| [assets/README.md](assets/README.md) | Current visual references and interpretation |
-| [third_party/PROVENANCE.md](third_party/PROVENANCE.md) | Pinned upstream source, licenses and checksums |
-| [SOURCES.md](SOURCES.md) | Evidence, official references and known limitations |
-| [validation/STATUS.md](validation/STATUS.md) | Package checks versus unperformed product validation |
-
-No AI Slop and Humanizer are two **alternative reviewed style profiles**, not two entire autonomous skill workflows stacked together. The original sources and license notices are bundled separately. Selecting no profile still runs the core editor.
-
-Development starts with a local native vertical slice, followed by bounded completion of settings, profiles, context and resilience. Publishing, cloud services, billing, file-selection mode, per-app adapters and rich-format fidelity are outside this handoff.
+The original handoff and receipts remain historical evidence; their old selectable-profile/custom-instruction controls are superseded by the September 30 LiTiL revision. Source snapshots and MIT license notices remain unchanged, with the notices included as files in the app bundle. The licenses menu item and window have been removed.

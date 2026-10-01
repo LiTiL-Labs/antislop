@@ -101,7 +101,7 @@ public enum ProviderFailure: Error, Equatable, Sendable {
         case .cancelled: return "Cancelled."
         case .toolUseBlocked(let p, _): return "\(p.displayName) tried to use a tool, so Anti-slop stopped the request."
         case .malformedResponse(let p, _): return "\(p.displayName) returned an unusable response. Try again."
-        case .runtimeError(let p, _): return "\(p.displayName) couldn't complete the rewrite. Try again."
+        case .runtimeError(let p, _): return "\(p.displayName) couldn't complete the request. Try again."
         }
     }
 
@@ -153,6 +153,10 @@ public protocol RewriteProvider: AnyObject, Sendable {
     func checkReadiness() async -> ReadinessState
     func signInCommand() async -> SignInCommand?
     func rewrite(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderRewrite
+    /// Models this account can use, as the runtime itself reports them. No inference.
+    func availableModels() async throws -> [ModelOption]
+    /// Slop-detection mode: findings only, never replacement text.
+    func detect(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderDetection
 }
 
 extension RewriteProvider {

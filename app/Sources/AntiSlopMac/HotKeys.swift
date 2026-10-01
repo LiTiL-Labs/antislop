@@ -3,25 +3,40 @@ import AntiSlopCore
 import AppKit
 import Carbon
 
-/// Registers the user's chosen trigger with the Carbon hot-key API, which
-/// supports single keys and modified combinations without Accessibility or
-/// Input Monitoring permission. The key is consumed system-wide while
-/// registered; registration is suspended while Anti-slop itself is active so
-/// the assigned key can be typed in Anti-slop's own fields. Used on the main
-/// thread only (Carbon delivers application-target events there).
-public final class HotKeyManager {
-    public private(set) var binding: ShortcutBinding?
-    public var onPress: (() -> Void)?
+/// The two independently assigned triggers.
+public enum HotKeyAction: UInt32, CaseIterable {
+    case rewrite = 1
+    case detect = 2
 
-    private var ref: EventHotKeyRef?
+    var name: String { self == .rewrite ? "anti-slop key" : "slop-detection key" }
+}
+
+/// Registers the user's chosen triggers. Ordinary keys and combinations use the
+/// Carbon hot-key API, which consumes the key system-wide and needs no extra
+/// permission. A lone modifier (Right ⌥, Fn, Caps Lock…) can't be registered
+/// that way, so it is watched with a global modifier-change monitor, which needs
+/// the Accessibility access Anti-slop already requires; it types nothing, so
+/// there is nothing to consume. Registration is suspended while Anti-slop itself
+/// is active so its own fields and panel receive the keys (global monitors never
+/// see Anti-slop's own events either). Used on the main thread only.
+public final class HotKeyManager {
+    public private(set) var bindings: [HotKeyAction: ShortcutBinding] = [:]
+    public var onPress: ((HotKeyAction) -> Void)?
+
+    private var refs: [HotKeyAction: EventHotKeyRef] = [:]
     private var handler: EventHandlerRef?
-    private var isDown = false
+    private var down: Set<HotKeyAction> = []
     private var suspended = false
+    private var loneDetectors: [HotKeyAction: LoneModifierDetector] = [:]
+    private var loneMonitor: Any?
     private static let signature: OSType = 0x4153_4C50 // "ASLP"
+    private static let probeID: UInt32 = 99
 
     public init() {
         installHandler()
     }
+
+    public func binding(for action: HotKeyAction) -> ShortcutBinding? { bindings[action] }
 
     private func installHandler() {
         var types = [
@@ -31,21 +46,25 @@ public final class HotKeyManager {
         let context = Unmanaged.passUnretained(self).toOpaque()
         InstallEventHandler(GetApplicationEventTarget(), { _, event, userData -> OSStatus in
             guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+            var id = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                              nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
             let kind = GetEventKind(event)
             let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-            manager.handle(kind: kind)
+            manager.handle(kind: kind, id: id.id)
             return 0
         }, 2, &types, context, &handler)
     }
 
-    private func handle(kind: UInt32) {
+    private func handle(kind: UInt32, id: UInt32) {
+        guard let action = HotKeyAction(rawValue: id) else { return }
         if kind == UInt32(kEventHotKeyPressed) {
             // Holding the key produces one activation, not repeated requests.
-            guard !isDown else { return }
-            isDown = true
-            onPress?()
+            guard !down.contains(action) else { return }
+            down.insert(action)
+            onPress?(action)
         } else if kind == UInt32(kEventHotKeyReleased) {
-            isDown = false
+            down.remove(action)
         }
     }
 
@@ -68,58 +87,98 @@ public final class HotKeyManager {
 
     /// Ask macOS whether this binding can be registered, without keeping it.
     /// Success means registration works; it cannot rule out an app-specific
-    /// conflict, and some system shortcuts may still take precedence.
-    public func canRegister(_ b: ShortcutBinding) -> OSStatus {
-        if b == binding && ref != nil { return 0 }
-        let (status, testRef) = registerRaw(b, id: 99)
+    /// conflict, and some system shortcuts may still take precedence. A lone
+    /// modifier is watched rather than registered, so it always succeeds here.
+    public func canRegister(_ b: ShortcutBinding, for action: HotKeyAction) -> OSStatus {
+        if b.isLoneModifier { return 0 }
+        if b == bindings[action] && refs[action] != nil { return 0 }
+        let (status, testRef) = registerRaw(b, id: Self.probeID)
         if let testRef { UnregisterEventHotKey(testRef) }
         return status
     }
 
-    /// Replace the active binding only after the new one registers; on failure
+    /// Replace one action's binding only after the new one registers; on failure
     /// the previous valid binding stays in place.
     @discardableResult
-    public func apply(_ b: ShortcutBinding?) -> OSStatus {
+    public func apply(_ b: ShortcutBinding?, for action: HotKeyAction) -> OSStatus {
         guard let b, b.enabled else {
-            unregisterCurrent()
-            binding = nil
+            unregister(action)
+            bindings[action] = nil
+            refreshLoneMonitor()
             return 0
         }
-        if b == binding && (ref != nil || suspended) { return 0 }
-        if suspended {
-            let status = canRegister(b)
-            if status == 0 { binding = b }
-            return status
+        if b == bindings[action] && (refs[action] != nil || suspended || b.isLoneModifier) { return 0 }
+        if suspended || b.isLoneModifier {
+            let status = canRegister(b, for: action)
+            guard status == 0 else { return status }
+            unregister(action)
+            bindings[action] = b
+            refreshLoneMonitor()
+            return 0
         }
-        let (status, newRef) = registerRaw(b, id: 1)
+        let (status, newRef) = registerRaw(b, id: action.rawValue)
         guard status == 0, let newRef else { return status }
-        if let ref { UnregisterEventHotKey(ref) }
-        ref = newRef
-        binding = b
+        unregister(action)
+        refs[action] = newRef
+        bindings[action] = b
+        refreshLoneMonitor()
         return 0
     }
 
     public func suspend() {
         guard !suspended else { return }
         suspended = true
-        unregisterCurrent()
-        isDown = false
+        for action in HotKeyAction.allCases { unregister(action) }
+        down = []
+        for key in loneDetectors.keys { loneDetectors[key]?.otherKeyDown() }
     }
 
-    /// Re-register the binding after a suspension; returns the registration status (0 when nothing to do).
+    /// Re-register the bindings after a suspension; returns the first failing
+    /// registration status (0 when all registered or nothing to do).
     @discardableResult
     public func resume() -> OSStatus {
         guard suspended else { return 0 }
         suspended = false
-        guard let b = binding else { return 0 }
-        let (status, newRef) = registerRaw(b, id: 1)
-        if status == 0 { ref = newRef }
-        return status
+        var result: OSStatus = 0
+        for (action, b) in bindings where !b.isLoneModifier {
+            let (status, newRef) = registerRaw(b, id: action.rawValue)
+            if status == 0 { refs[action] = newRef } else if result == 0 { result = status }
+        }
+        return result
     }
 
-    private func unregisterCurrent() {
-        if let ref { UnregisterEventHotKey(ref) }
-        ref = nil
+    private func unregister(_ action: HotKeyAction) {
+        if let ref = refs[action] { UnregisterEventHotKey(ref) }
+        refs[action] = nil
+    }
+
+    // MARK: Lone modifiers
+
+    private func refreshLoneMonitor() {
+        loneDetectors = [:]
+        for (action, b) in bindings where b.isLoneModifier {
+            loneDetectors[action] = LoneModifierDetector(keyCode: b.keyCode)
+        }
+        if loneDetectors.isEmpty {
+            if let loneMonitor { NSEvent.removeMonitor(loneMonitor) }
+            loneMonitor = nil
+        } else if loneMonitor == nil {
+            loneMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+                self?.observe(event)
+            }
+        }
+    }
+
+    private func observe(_ event: NSEvent) {
+        for action in Array(loneDetectors.keys) {
+            if event.type == .keyDown {
+                loneDetectors[action]?.otherKeyDown()
+            } else if loneDetectors[action]?.flagsChanged(keyCode: Int(event.keyCode),
+                                                          flags: event.modifierFlags.rawValue) == true,
+                      !suspended {
+                onPress?(action)
+            }
+        }
     }
 
     public static func describe(_ status: OSStatus) -> String {
@@ -129,6 +188,21 @@ public final class HotKeyManager {
         case -9868: return "macOS rejected this key as a shortcut."
         default: return "macOS couldn't register this shortcut (error \(status))."
         }
+    }
+}
+
+extension ShortcutBinding {
+    /// True when a key-down event in Anti-slop's own windows is exactly this
+    /// (non-lone) binding. A held Fn/Globe never counts as a modifier here.
+    func matches(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, !isLoneModifier, Int(event.keyCode) == keyCode else { return false }
+        let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        var mods = Set<ShortcutModifier>()
+        if flags.contains(.command) { mods.insert(.command) }
+        if flags.contains(.option) { mods.insert(.option) }
+        if flags.contains(.control) { mods.insert(.control) }
+        if flags.contains(.shift) { mods.insert(.shift) }
+        return mods == modifierSet.subtracting([.function])
     }
 }
 

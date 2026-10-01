@@ -3,23 +3,31 @@ import AntiSlopCore
 import AppKit
 import Carbon
 
+/// What the settings screen knows about one connection's model list.
+enum ModelCatalogState: Equatable {
+    case loading
+    case loaded([ModelOption])
+    case failed(String)
+}
+
 /// Draft state for the one settings screen (first launch and later). Nothing
 /// is persisted until Done validates and saves atomically.
 @MainActor
 final class SettingsModel: ObservableObject {
     @Published var draft: AppSettings
     @Published var readiness: [ProviderID: ReadinessState] = [:]
+    @Published var catalogs: [ProviderID: ModelCatalogState] = [:]
     @Published var manageExpanded = false
-    @Published var recording = false
+    /// Which key is being recorded, if any.
+    @Published var recording: HotKeyAction?
     @Published var recorderHint: String?
-    @Published var shortcutMessage: String?
-    @Published var shortcutIsError = false
-    @Published var shortcutWarnings: [String] = []
+    @Published var shortcutMessage: [HotKeyAction: String] = [:]
+    @Published var shortcutIsError: [HotKeyAction: Bool] = [:]
+    @Published var shortcutWarnings: [HotKeyAction: [String]] = [:]
     @Published var accessibilityTrusted = AX.trusted(prompt: false)
     @Published var guideExpanded = false
     @Published var guideLabel = ""
     @Published var guideText = ""
-    @Published var moreOptions = false
     @Published var errors: [String] = []
     @Published var notice: String?
     /// Set once the user picks a connection; automatic preselection stops then.
@@ -30,11 +38,14 @@ final class SettingsModel: ObservableObject {
     var onClose: () -> Void = {}
     var onSignIn: (ProviderID) -> Void = { _ in }
     var onCheck: (ProviderID) -> Void = { _ in }
-    var onAcknowledgements: () -> Void = {}
-    var canRegister: (ShortcutBinding) -> OSStatus = { _ in 0 }
+    /// Ask the connection for its model list (no inference).
+    var onLoadModels: (ProviderID) -> Void = { _ in }
+    var canRegister: (ShortcutBinding, HotKeyAction) -> OSStatus = { _, _ in 0 }
     var systemHotKeys: () -> [SystemHotKey] = { [] }
 
     private var monitor: Any?
+    /// A modifier pressed on its own during recording; recorded if released alone.
+    private var loneCandidate: LoneModifierDetector?
 
     init(settings: AppSettings, isFirstLaunch: Bool, notice: String?) {
         self.draft = settings
@@ -44,19 +55,42 @@ final class SettingsModel: ObservableObject {
             guideLabel = g.label
             guideText = g.text
         }
-        if let s = settings.shortcut {
-            shortcutWarnings = ShortcutAdvisor.assess(s, systemHotKeys: []).warnings
+        for action in HotKeyAction.allCases {
+            if let b = Self.binding(settings, action) {
+                shortcutWarnings[action] = ShortcutAdvisor.assess(b, systemHotKeys: [], appliesInPanel: action == .rewrite,
+                                                                  includeGeneralGuidance: false).warnings
+            }
         }
-        moreOptions = settings.writingPreferences.avoidEmDashes
     }
 
     // MARK: Shortcut recording
 
-    func beginRecording() {
+    static func binding(_ s: AppSettings, _ action: HotKeyAction) -> ShortcutBinding? {
+        action == .rewrite ? s.shortcut : s.detectShortcut
+    }
+
+    func binding(for action: HotKeyAction) -> ShortcutBinding? { Self.binding(draft, action) }
+
+    /// Specific caveats appear once below the shared shortcut guidance, even
+    /// when both assignments have the same OS requirement.
+    var shortcutCaveats: [String] {
+        var seen = Set<String>()
+        return HotKeyAction.allCases.flatMap { shortcutWarnings[$0] ?? [] }
+            .filter { seen.insert($0).inserted }
+    }
+
+    private func setBinding(_ b: ShortcutBinding?, for action: HotKeyAction) {
+        if action == .rewrite { draft.shortcut = b } else { draft.detectShortcut = b }
+    }
+
+    static let idleHint = "Press a key, a combination, or a modifier key on its own."
+
+    func beginRecording(_ action: HotKeyAction) {
         stopMonitor()
-        recording = true
-        recorderHint = "Press the key or combination you want to use."
-        shortcutMessage = nil
+        recording = action
+        recorderHint = Self.idleHint
+        shortcutMessage[action] = nil
+        loneCandidate = nil
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             let consumed = MainActor.assumeIsolated { () -> Bool in
                 guard let self else { return false }
@@ -68,21 +102,34 @@ final class SettingsModel: ObservableObject {
 
     /// Returns true when the event was used by the recorder (and must not reach other controls).
     private func handleRecorderEvent(_ event: NSEvent) -> Bool {
-        guard recording else { return false }
+        guard let action = recording else { return false }
         if event.type == .flagsChanged {
-            let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
-            recorderHint = mods.isEmpty ? "Press the key or combination you want to use."
-                : "Now press a key to go with the modifier."
+            let code = Int(event.keyCode)
+            guard KeyCodes.modifierOnly.contains(code) else { return true }
+            let raw = event.modifierFlags.rawValue
+            if loneCandidate?.keyCode != code, KeyCodes.modifierState(keyCode: code, flags: raw).isDown || code == KeyCodes.capsLock {
+                loneCandidate = LoneModifierDetector(keyCode: code, maxHold: 3)
+            }
+            if loneCandidate?.flagsChanged(keyCode: code, flags: raw) == true {
+                loneCandidate = nil
+                record(keyCode: code, flags: [], characters: nil, for: action)
+                return true
+            }
+            let mods = event.modifierFlags.intersection([.command, .option, .control, .shift, .function])
+            recorderHint = mods.isEmpty ? Self.idleHint
+                : "Release it to use \(KeyCodes.modifierKeyNames[code] ?? "that key") on its own, or press another key with it."
             return true
         }
+        loneCandidate?.otherKeyDown()
         if event.isARepeat { return true }
-        record(keyCode: Int(event.keyCode), flags: event.modifierFlags, characters: event.charactersIgnoringModifiers)
+        record(keyCode: Int(event.keyCode), flags: event.modifierFlags, characters: event.charactersIgnoringModifiers, for: action)
         return true
     }
 
     func cancelRecording() {
-        recording = false
+        recording = nil
         recorderHint = nil
+        loneCandidate = nil
         stopMonitor()
     }
 
@@ -92,10 +139,8 @@ final class SettingsModel: ObservableObject {
     }
 
     /// Record exactly what was pressed. Never substitutes another key.
-    func record(keyCode: Int, flags: NSEvent.ModifierFlags, characters: String?) {
-        recording = false
-        recorderHint = nil
-        stopMonitor()
+    func record(keyCode: Int, flags: NSEvent.ModifierFlags, characters: String?, for action: HotKeyAction) {
+        cancelRecording()
         var mods: [ShortcutModifier] = []
         if flags.contains(.command) { mods.append(.command) }
         if flags.contains(.option) { mods.append(.option) }
@@ -105,31 +150,61 @@ final class SettingsModel: ObservableObject {
         if flags.contains(.function) && !KeyCodes.implicitFunctionFlag.contains(keyCode) { mods.append(.function) }
         let label = KeyCodes.label(keyCode: keyCode, character: characters, modifiers: mods)
         let candidate = ShortcutBinding(keyCode: keyCode, displayLabel: label, modifiers: mods)
-        let assessment = ShortcutAdvisor.assess(candidate, systemHotKeys: systemHotKeys())
-        if let blocking = assessment.blocking {
-            shortcutMessage = blocking
-            shortcutIsError = true
-            return // the previous assignment stays in the draft
-        }
-        let status = canRegister(candidate)
-        guard status == 0 else {
-            shortcutMessage = "\(label): \(HotKeyManager.describe(status))"
-            shortcutIsError = true
+        let other: HotKeyAction = action == .rewrite ? .detect : .rewrite
+        if let taken = binding(for: other), taken.sameKey(as: candidate) {
+            shortcutMessage[action] = "\(label) is already your \(other.name). Choose a different key."
+            shortcutIsError[action] = true
             return
         }
-        draft.shortcut = candidate
-        shortcutWarnings = assessment.warnings
-        shortcutIsError = false
-        shortcutMessage = "\(label) is ready to use after you choose Done."
+        let assessment = ShortcutAdvisor.assess(candidate, systemHotKeys: systemHotKeys(), appliesInPanel: action == .rewrite,
+                                                 includeGeneralGuidance: false)
+        if let blocking = assessment.blocking {
+            shortcutMessage[action] = blocking
+            shortcutIsError[action] = true
+            return // the previous assignment stays in the draft
+        }
+        let status = canRegister(candidate, action)
+        guard status == 0 else {
+            shortcutMessage[action] = "\(label): \(HotKeyManager.describe(status))"
+            shortcutIsError[action] = true
+            return
+        }
+        setBinding(candidate, for: action)
+        shortcutWarnings[action] = assessment.warnings
+        shortcutIsError[action] = false
+        shortcutMessage[action] = nil
     }
 
-    func removeShortcut() {
+    func removeShortcut(_ action: HotKeyAction) {
         cancelRecording()
-        draft.shortcut = nil
-        shortcutWarnings = []
-        shortcutIsError = false
-        shortcutMessage = "No key assigned. Use the Anti-slop menu bar item to open settings or rewrite a selection."
+        setBinding(nil, for: action)
+        shortcutWarnings[action] = []
+        shortcutIsError[action] = false
+        shortcutMessage[action] = nil
     }
+
+    // MARK: Model and reasoning
+
+    func loadModelsIfNeeded(_ p: ProviderID) {
+        switch catalogs[p] {
+        case .loaded?, .loading?: return
+        default: onLoadModels(p)
+        }
+    }
+
+    var preference: ModelPreference { draft.modelPreference(for: draft.providerID) }
+
+    var intelligence: Intelligence { draft.intelligence[draft.providerID] ?? .smart }
+
+    func selectIntelligence(_ value: Intelligence, catalog: [ModelOption]) {
+        draft.intelligence[draft.providerID] = value
+        if let resolved = value.resolve(in: catalog, provider: draft.providerID) {
+            draft.modelPreferences[draft.providerID] = resolved
+        }
+    }
+
+    var loginStatus: String { LoginItem.statusText }
+    func openLoginItems() { LoginItem.openSettings() }
 
     // MARK: Guide
 
@@ -148,6 +223,10 @@ final class SettingsModel: ObservableObject {
 
     func done() {
         cancelRecording()
+        // Resolve the visible preset on Done, including the first migration from old model controls.
+        if case .loaded(let models)? = catalogs[draft.providerID] {
+            selectIntelligence(intelligence, catalog: models)
+        }
         var candidate = draft
         let label = guideLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         if guideExpanded || draft.styleGuide != nil {

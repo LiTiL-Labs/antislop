@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Anti-slop local settings 0.2",
+  "title": "Anti-slop local settings 0.3",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.2"
+      "const": "0.3"
     },
     "provider_id": {
       "enum": [
@@ -59,37 +59,69 @@
         }
       ]
     },
-    "style_profile_id": {
-      "enum": [
-        "none",
-        "no-ai-slop",
-        "humanizer"
+    "detect_shortcut": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key_code": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "display_label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "modifiers": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 5,
+              "items": {
+                "enum": [
+                  "command",
+                  "option",
+                  "control",
+                  "shift",
+                  "function"
+                ]
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "key_code",
+            "display_label",
+            "modifiers",
+            "enabled"
+          ]
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "writing_preferences": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "simplify_wording": {
-          "type": "boolean"
-        },
-        "keep_my_tone": {
-          "type": "boolean"
-        },
-        "avoid_em_dashes": {
-          "type": "boolean"
+        "sentence_complexity": {
+          "enum": [
+            "caveman",
+            "plain",
+            "balanced",
+            "polished",
+            "lawyer"
+          ]
         }
       },
       "required": [
-        "simplify_wording",
-        "keep_my_tone",
-        "avoid_em_dashes"
+        "sentence_complexity"
       ]
-    },
-    "custom_writer_instructions": {
-      "type": "string",
-      "minLength": 0,
-      "maxLength": 4000
     },
     "style_guide": {
       "anyOf": [
@@ -117,15 +149,113 @@
           "type": "null"
         }
       ]
+    },
+    "model_preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "reasoning"
+          ]
+        },
+        "claude-code": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reasoning": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "reasoning"
+          ]
+        }
+      }
+    },
+    "launch_at_login": {
+      "type": "boolean"
+    },
+    "intelligence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "codex": {
+          "enum": [
+            "room_temp",
+            "average",
+            "smart",
+            "genius"
+          ]
+        },
+        "claude-code": {
+          "enum": [
+            "room_temp",
+            "average",
+            "smart",
+            "genius"
+          ]
+        }
+      }
     }
   },
   "required": [
     "schema_version",
     "provider_id",
     "shortcut",
-    "style_profile_id",
     "writing_preferences",
-    "custom_writer_instructions",
-    "style_guide"
+    "style_guide",
+    "launch_at_login"
   ]
 }

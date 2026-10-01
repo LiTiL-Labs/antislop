@@ -267,8 +267,7 @@ public enum AXProbe {
         let settingsURL = FileManager.default.temporaryDirectory.appendingPathComponent("anti-slop-e2e-settings.json")
         // ⌃⌥⌘J: a combination with no default system meaning.
         let shortcut = ShortcutBinding(keyCode: 0x26, displayLabel: "⌃⌥⌘J", modifiers: [.control, .option, .command])
-        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: liveProvider ?? .claudeCode, shortcut: shortcut,
-                                                                   customWriterInstructions: "Keep it measured."))
+        try? SettingsStore(fileURL: settingsURL).save(AppSettings(providerID: liveProvider ?? .claudeCode, shortcut: shortcut))
         let exe = URL(fileURLWithPath: appPath).appendingPathComponent("Contents/MacOS/AntiSlop")
         let proc = Process()
         proc.executableURL = exe
@@ -316,7 +315,7 @@ public enum AXProbe {
         try? await Task.sleep(nanoseconds: 800_000_000)
         record("e2e_escape_no_change", AX.string(el, "AXValue") == original, "document unchanged after Escape")
 
-        // Trigger again and apply with Command-Return (A28/A30).
+        // Trigger again and apply by pressing the assigned key again (A28/A30).
         await waitFrontmost(app)
         _ = select(el, target, in: original)
         try? await Task.sleep(nanoseconds: 300_000_000)
@@ -328,7 +327,7 @@ public enum AXProbe {
             return
         }
         try? await Task.sleep(nanoseconds: 2_000_000_000)
-        KeyboardEvents.postChord(keyCode: 0x24, flags: [.maskCommand])
+        KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand])
         var applied = false
         let expected = original.replacingOccurrences(of: target, with: replacement)
         for _ in 0..<40 {
@@ -384,7 +383,7 @@ public enum AXProbe {
         }
         func screenText() -> String { elementTexts(app, depth: 30).joined(separator: " | ") }
         func currentKey() -> String {
-            elementTexts(app, depth: 30).first { $0.hasPrefix("Current key:") } ?? "(no current-key label)"
+            elementTexts(app, depth: 30).first { $0.hasPrefix("Current anti-slop key:") } ?? "(no current-key label)"
         }
         NSRunningApplication(processIdentifier: pid)?.activate(options: [])
         try? await Task.sleep(nanoseconds: 500_000_000)
@@ -395,9 +394,9 @@ public enum AXProbe {
         }
         KeyboardEvents.postChord(keyCode: 0x28, flags: [.maskControl, .maskAlternate, .maskCommand]) // ⌃⌥⌘K
         try? await Task.sleep(nanoseconds: 600_000_000)
-        let recorded = screenText().contains("K is ready to use after you choose Done.")
+        let recorded = currentKey().contains("⌃⌥⌘K")
         record("recorder_records_combination", recorded && currentKey().contains("K"),
-               "\(currentKey()); message shown: \(recorded)")
+               "\(currentKey()); assignment shown: \(recorded)")
 
         // Fn/Globe combinations can't be registered on macOS: specific feedback, previous key kept.
         _ = await press("Assign anti-slop key")
@@ -487,25 +486,23 @@ public enum AXProbe {
         record("held_key_one_activation", draft == replacement && panels == 1,
                "\(panels) panel window(s); draft: \(draft?.debugDescription ?? "none")")
 
-        // A06/A28: inside the panel the assigned key types normally and Return adds a newline.
+        // A28: inside the panel Return adds a newline and does not apply.
         KeyboardEvents.postChord(keyCode: 0x00, flags: .maskCommand) // ⌘A in the editor
         try? await Task.sleep(nanoseconds: 200_000_000)
         KeyboardEvents.typeText("Edited by hand")
-        KeyboardEvents.postChord(keyCode: grave, flags: [])
         KeyboardEvents.postChord(keyCode: 0x24, flags: [])
         KeyboardEvents.typeText("second line.")
         try? await Task.sleep(nanoseconds: 600_000_000)
         let edited = panelEditorText(pid: pid) ?? ""
-        let expectedEdit = "Edited by hand`\nsecond line."
+        let expectedEdit = "Edited by hand\nsecond line."
         let stillOriginal = AX.string(el, "AXValue") == original
         let editFocus = await focusReport(pid: pid)
-        record("assigned_key_types_in_panel", edited.hasPrefix("Edited by hand`") && stillOriginal,
-               "editor reads \(edited.debugDescription); document unchanged: \(stillOriginal); \(editFocus)")
         record("return_inserts_newline", edited == expectedEdit && stillOriginal,
-               "Return added a newline and did not apply: \(edited == expectedEdit && stillOriginal)")
+               "editor reads \(edited.debugDescription); document unchanged: \(stillOriginal); \(editFocus)")
 
-        // A28/A30: the edited draft is applied once, only over the selection.
-        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
+        // A28/A30: the assigned key, pressed in the panel, applies the edited draft
+        // once, only over the selection.
+        KeyboardEvents.postChord(keyCode: grave, flags: [])
         var final: String? = nil
         for _ in 0..<40 {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -514,8 +511,8 @@ public enum AXProbe {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         let expectedDoc = original.replacingOccurrences(of: target, with: expectedEdit)
         let settled = AX.string(el, "AXValue")
-        record("edited_draft_applied_once", final == expectedDoc && settled == expectedDoc,
-               final == expectedDoc ? "document now holds the edited draft exactly once" : "document: \(settled.debugDescription)")
+        record("assigned_key_applies_in_panel", final == expectedDoc && settled == expectedDoc,
+               final == expectedDoc ? "` applied: the document now holds the edited draft exactly once" : "document: \(settled.debugDescription)")
         let closedAfterEdit = !(await isPanelVisible(pid: pid))
         record("panel_closes_after_edited_apply", closedAfterEdit && proc.isRunning,
                "panel dismissed after confirmed replacement: \(closedAfterEdit); app still running: \(proc.isRunning)")
@@ -538,12 +535,12 @@ public enum AXProbe {
         KeyboardEvents.postChord(keyCode: 0x33, flags: [])           // Delete
         try? await Task.sleep(nanoseconds: 300_000_000)
         let emptied = panelEditorText(pid: pid) ?? "(no editor)"
-        KeyboardEvents.postChord(keyCode: 0x24, flags: .maskCommand)
+        KeyboardEvents.postChord(keyCode: grave, flags: [])
         try? await Task.sleep(nanoseconds: 800_000_000)
         let panelOpen = await isPanelVisible(pid: pid)
         let blankKept = AX.string(el, "AXValue") == now && emptied.isEmpty && panelOpen
         record("blank_draft_not_applied", blankKept,
-               "editor before ⌘Return \(emptied.debugDescription); document unchanged and panel open: \(blankKept); panel says: \(panelStaticTexts(pid: pid).joined(separator: " | "))")
+               "editor before ` \(emptied.debugDescription); document unchanged and panel open: \(blankKept); panel says: \(panelStaticTexts(pid: pid).joined(separator: " | "))")
         KeyboardEvents.typeText("Kept typing.")
         try? await Task.sleep(nanoseconds: 500_000_000)
         let afterBlank = panelEditorText(pid: pid) ?? "(no editor)"
@@ -667,7 +664,7 @@ public enum AXProbe {
         }
         record("live_proposal", true, "\(provider.displayName) proposal: \(proposal)")
         shoot("live-panel-ready.png")
-        KeyboardEvents.postChord(keyCode: 0x24, flags: [.maskCommand])
+        KeyboardEvents.postChord(keyCode: 0x26, flags: [.maskControl, .maskAlternate, .maskCommand]) // the assigned key applies
         let head = "Intro sentence stays. ", tail = " Closing sentence stays.\n"
         var final: String? = nil
         for _ in 0..<60 {

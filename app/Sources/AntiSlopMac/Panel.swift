@@ -23,6 +23,7 @@ enum StatusKind: Equatable {
 /// UI state for the floating panel, derived from the session each time it changes.
 @MainActor
 final class PanelModel: ObservableObject {
+    @Published var mode: SessionMode = .rewrite
     @Published var statusKind: StatusKind = .working
     @Published var statusText = "Reading context…"
     @Published var draft = ""
@@ -31,6 +32,11 @@ final class PanelModel: ObservableObject {
     @Published var info: String?
     @Published var applyEnabled = false
     @Published var footerText = "⌘ Return to apply"
+    @Published var findings: [SlopFinding] = []
+    @Published var showsFindings = false
+    @Published var findingsHeight: CGFloat = 0
+    /// ⌘Return applies only when no anti-slop key is assigned; otherwise that key does.
+    @Published var commandReturnApplies = true
     @Published var actions: [PanelAction] = []
     @Published var isFixture = false
     @Published var editorHeight: CGFloat = 150
@@ -38,6 +44,8 @@ final class PanelModel: ObservableObject {
     @Published var reduceTransparency = Theme.reduceTransparency
 
     var onApply: () -> Void = {}
+    /// The anti-slop key pressed inside the panel: apply, or rewrite after a check.
+    var onTriggerKey: () -> Void = {}
     var onClose: () -> Void = {}
     var onSettings: () -> Void = {}
     var onAction: (PanelAction) -> Void = { _ in }
@@ -46,12 +54,29 @@ final class PanelModel: ObservableObject {
 
     private var lastAnnounced: String?
 
+    /// The anti-slop key, which applies inside the panel. nil means ⌘Return.
+    var applyKey: ShortcutBinding? {
+        didSet { commandReturnApplies = applyKey == nil }
+    }
+    var applyKeyLabel: String { applyKey?.displayLabel ?? "⌘ Return" }
+    var title: String { mode == .detect ? "Slop Check" : "Anti-Slop" }
+
     func update(from session: RewriteSession?) {
         guard let s = session else { return }
         let hadEditor = showsEditor
+        let hadFindings = showsFindings
         isFixture = s.usedFixture
+        mode = s.mode
         actions = []
         info = nil
+        if s.mode == .detect {
+            updateDetection(from: s)
+            if hadEditor != showsEditor || hadFindings != showsFindings { onLayoutChange() }
+            announceIfNeeded(s)
+            return
+        }
+        showsFindings = false
+        findings = []
         switch s.phase {
         case .generating:
             statusKind = .working
@@ -98,7 +123,7 @@ final class PanelModel: ObservableObject {
             switch e {
             case .selectionTooLong(let n): statusText = CaptureRefusal.tooLong(count: n).message
             case .emptySelection: statusText = CaptureRefusal.noSelection.message
-            default: statusText = "Couldn't prepare this selection. Check the writing guide and instructions in settings."
+            default: statusText = "Couldn't prepare this selection. Check the writing guide in settings."
             }
             showsEditor = false
             actions = [.openSettings]
@@ -109,20 +134,57 @@ final class PanelModel: ObservableObject {
         switch s.applyAvailability {
         case .enabled:
             applyEnabled = true
-            footerText = "⌘ Return to apply"
+            footerText = "\(applyKeyLabel) to apply"
         case .disabled(let reason):
             applyEnabled = false
-            footerText = reason ?? (s.phase == .applying ? "Replacing text…" : "⌘ Return to apply")
+            footerText = reason ?? (s.phase == .applying ? "Replacing text…" : "\(applyKeyLabel) to apply")
         }
         if hadEditor != showsEditor { onLayoutChange() }
         if showsEditor && !hadEditor { focusToken += 1 }
         announceIfNeeded(s)
     }
 
+    /// Detection shows findings instead of an editor. The primary button rewrites
+    /// the same selection; nothing here can change the source text.
+    private func updateDetection(from s: RewriteSession) {
+        showsEditor = false
+        editorEditable = false
+        showsFindings = false
+        switch s.phase {
+        case .generating:
+            statusKind = .working
+            statusText = "Checking for slop…"
+        case .ready:
+            statusKind = .intent
+            statusText = RewriteSession.singleLine(s.detection?.summary ?? "", limit: Limits.intent)
+            findings = s.detection?.findings ?? []
+            showsFindings = true
+        case .failed(.provider(let f)):
+            statusKind = .error
+            statusText = f.userMessage
+            actions = f == .cancelled ? [] : ([.retry] + (f.suggestsSettings ? [.openSettings] : []))
+        case .failed(.composition(let e)):
+            statusKind = .error
+            switch e {
+            case .selectionTooLong(let n): statusText = CaptureRefusal.tooLong(count: n).message
+            case .emptySelection: statusText = CaptureRefusal.noSelection.message
+            default: statusText = "Couldn't prepare this selection. Check the writing guide in settings."
+            }
+            actions = [.openSettings]
+        default:
+            break
+        }
+        applyEnabled = !s.phase.isTerminal
+        footerText = applyKey.map { "\($0.displayLabel) to rewrite" } ?? "Rewrite this selection"
+    }
+
     /// Announce ready/error state once, without reading the whole draft.
     private func announceIfNeeded(_ s: RewriteSession) {
         let text: String?
         switch s.phase {
+        case .ready where s.mode == .detect:
+            let n = s.detection?.findings.count ?? 0
+            text = "Slop check ready. \(n == 1 ? "1 passage" : "\(n) passages") flagged. \(statusText)"
         case .ready: text = "Rewrite ready. \(statusText)"
         case .targetChanged, .failed: text = statusText
         default: text = nil
@@ -134,6 +196,10 @@ final class PanelModel: ObservableObject {
     }
 
     func reset() {
+        mode = .rewrite
+        findings = []
+        showsFindings = false
+        findingsHeight = 0
         statusKind = .working
         statusText = "Reading context…"
         draft = ""
@@ -142,7 +208,7 @@ final class PanelModel: ObservableObject {
         info = nil
         actions = []
         applyEnabled = false
-        footerText = "⌘ Return to apply"
+        footerText = "\(applyKeyLabel) to apply"
         lastAnnounced = nil
         editorHeight = 150
         reduceTransparency = Theme.reduceTransparency
@@ -156,7 +222,11 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             statusLine
-            editorArea
+            if model.showsFindings {
+                findingsArea
+            } else {
+                editorArea
+            }
             if let info = model.info {
                 Text(info)
                     .font(.system(size: 12))
@@ -184,9 +254,10 @@ struct PanelView: View {
 
     var header: some View {
         HStack(spacing: 4) {
-            Text("Anti-slop")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundColor(Theme.primaryText)
+            Text(model.title)
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(Theme.orange)
+                .background(Theme.shell)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             IconButton(systemName: "gearshape", label: "Settings", action: model.onSettings)
@@ -249,7 +320,7 @@ struct PanelView: View {
                         if abs(h - model.editorHeight) > 1 { model.editorHeight = h; model.onLayoutChange() }
                     }),
                     focusToken: model.focusToken,
-                    onCommandReturn: model.onApply,
+                    onCommandReturn: model.commandReturnApplies ? model.onApply : nil,
                     onEscape: model.onClose
                 )
                 .padding(.vertical, 2)
@@ -268,6 +339,47 @@ struct PanelView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.editorRadius, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
     }
 
+    /// Detection results: each flagged passage quoted exactly, with the pattern.
+    var findingsArea: some View {
+        let list = VStack(alignment: .leading, spacing: 12) {
+            if model.findings.isEmpty {
+                Text("Nothing to flag.")
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText)
+            }
+            ForEach(Array(model.findings.enumerated()), id: \.offset) { _, f in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("“\(f.quote)”")
+                        .font(Font(Theme.editorFont))
+                        .foregroundColor(Theme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    Text(f.issue)
+                        .font(.system(size: 12.5))
+                        .foregroundColor(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.leading, 10)
+                .overlay(Rectangle().fill(Theme.warning.opacity(0.55)).frame(width: 2), alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Flagged: \(f.quote). \(f.issue)")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(GeometryReader { g in
+            Color.clear.preference(key: FindingsHeightKey.self, value: g.size.height)
+        })
+        return ScrollView { list }
+            .onPreferenceChange(FindingsHeightKey.self) { h in
+                if abs(h - model.findingsHeight) > 1 { model.findingsHeight = h; model.onLayoutChange() }
+            }
+            .frame(height: min(max(model.findingsHeight, 60), Self.maxEditorHeight))
+            .background(RoundedRectangle(cornerRadius: Theme.editorRadius, style: .continuous).fill(Theme.editor))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.editorRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.editorRadius, style: .continuous).strokeBorder(Theme.border, lineWidth: 1))
+    }
+
     static var maxEditorHeight: CGFloat {
         let visible = NSScreen.main?.visibleFrame.height ?? 800
         return max(160, min(420, visible - 260))
@@ -279,17 +391,25 @@ struct PanelView: View {
                 .font(.system(size: 12.5))
                 .foregroundColor(Theme.secondaryText)
             Spacer()
-            Button("Anti-slop", action: model.onApply)
+            Button("Anti-slop", action: model.mode == .detect ? model.onTriggerKey : model.onApply)
                 .buttonStyle(PrimaryButtonStyle(enabled: model.applyEnabled))
                 .disabled(!model.applyEnabled)
-                .keyboardShortcut(.return, modifiers: .command)
-                .help("Replace the original selection with this text")
-                .accessibilityLabel("Anti-slop: replace the original selection")
+                .keyboardShortcut(model.commandReturnApplies && model.mode == .rewrite
+                                  ? KeyboardShortcut(.return, modifiers: .command) : nil)
+                .help(model.mode == .detect ? "Rewrite this selection" : "Replace the original selection with this text")
+                .accessibilityLabel(model.mode == .detect ? "Anti-slop: rewrite this selection"
+                                                          : "Anti-slop: replace the original selection")
         }
     }
 }
 
-/// Plain-text editor: ordinary Return inserts a newline; Command-Return applies;
+private struct FindingsHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/// Plain-text editor: ordinary Return inserts a newline; Command-Return applies
+/// when no anti-slop key is assigned (otherwise that key applies, see FloatingPanel);
 /// Escape closes. Automatic substitutions are off so the editor never alters
 /// quotes, dashes or spelling behind the writer's back.
 struct DraftEditor: NSViewRepresentable {
@@ -297,7 +417,7 @@ struct DraftEditor: NSViewRepresentable {
     var isEditable: Bool
     @Binding var contentHeight: CGFloat
     var focusToken: Int
-    var onCommandReturn: () -> Void
+    var onCommandReturn: (() -> Void)?
     var onEscape: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -406,8 +526,9 @@ final class DraftTextView: NSTextView {
 
     override func keyDown(with event: NSEvent) {
         let returnKeys: Set<UInt16> = [36, 76]
-        if returnKeys.contains(event.keyCode), event.modifierFlags.contains(.command), !hasMarkedText() {
-            onCommandReturn?()
+        if let apply = onCommandReturn, returnKeys.contains(event.keyCode),
+           event.modifierFlags.contains(.command), !hasMarkedText() {
+            apply()
             return
         }
         if event.keyCode == 53, !hasMarkedText() { // Escape closes instead of opening completions
@@ -450,11 +571,36 @@ final class FloatingPanel: NSPanel {
     /// Its auto-repeat is dropped, so holding the key never types into the draft.
     var heldTriggerKeyCode: UInt16?
 
+    /// The anti-slop key. Pressed while the panel is focused it applies (or, after a
+    /// slop check, starts the rewrite) instead of typing.
+    var triggerKey: ShortcutBinding? {
+        didSet { loneDetector = triggerKey.flatMap { $0.isLoneModifier ? LoneModifierDetector(keyCode: $0.keyCode) : nil } }
+    }
+    var onTriggerKey: (() -> Void)?
+    private var loneDetector: LoneModifierDetector?
+
     override func sendEvent(_ event: NSEvent) {
         if let held = heldTriggerKeyCode, event.type == .keyDown || event.type == .keyUp {
             if event.keyCode == held && event.type == .keyUp { heldTriggerKeyCode = nil; return }
             if event.keyCode == held && event.isARepeat { return }
             heldTriggerKeyCode = nil
+        }
+        if let key = triggerKey {
+            let composing = (firstResponder as? NSTextView)?.hasMarkedText() ?? false
+            if event.type == .flagsChanged,
+               loneDetector?.flagsChanged(keyCode: Int(event.keyCode), flags: event.modifierFlags.rawValue) == true {
+                super.sendEvent(event)
+                onTriggerKey?()
+                return
+            }
+            if event.type == .keyDown {
+                loneDetector?.otherKeyDown()
+                if key.matches(event), !composing {
+                    // Auto-repeat of a deliberate press is swallowed, never typed.
+                    if !event.isARepeat { onTriggerKey?() }
+                    return
+                }
+            }
         }
         super.sendEvent(event)
     }
@@ -471,6 +617,13 @@ final class PanelController {
     private var panel: FloatingPanel?
     private var hosting: NSHostingView<PanelView>?
     private(set) var placement: PlacementResult?
+    /// The anti-slop key, forwarded to the panel window and the footer hint.
+    var triggerKey: ShortcutBinding? {
+        didSet {
+            panel?.triggerKey = triggerKey
+            model.applyKey = triggerKey
+        }
+    }
     /// Incremented on every show, so a hide animation that finishes after a new
     /// show never hides the new panel.
     private var showGeneration = 0
@@ -489,6 +642,8 @@ final class PanelController {
         host.frame = NSRect(x: 0, y: 0, width: Theme.panelWidth, height: 320)
         p.contentView = host
         p.onCancel = { [weak self] in self?.model.onClose() }
+        p.triggerKey = triggerKey
+        p.onTriggerKey = { [weak self] in self?.model.onTriggerKey() }
         panel = p
         hosting = host
         return p
@@ -546,7 +701,7 @@ final class PanelController {
         NSAnimationContext.runAnimationGroup({ ctx in
             ctx.duration = Theme.reduceMotion ? 0.08 : 0.12
             p.animator().alphaValue = 0
-        }, completionHandler: {
+        }, completionHandler: { [weak self] in
             onMainAsync { [weak self] in
                 guard let self, self.showGeneration == generation else { return }
                 p.orderOut(nil)

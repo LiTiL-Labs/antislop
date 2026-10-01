@@ -36,6 +36,8 @@ final class FakeRuntime {
       --help) cat <<'EOF'
     Usage: claude [options] [command] [prompt]
     Options:
+      --effort <level>  x
+      --input-format <format>  x
       --json-schema <schema>  JSON Schema
       --tools <tools...>  tools
       --no-session-persistence  x
@@ -60,11 +62,16 @@ final class FakeRuntime {
     esac
     : > "$DIR/argv.txt"; for a in "$@"; do printf '%s\001' "$a" >> "$DIR/argv.txt"; done
     cat > "$DIR/stdin.txt"; env > "$DIR/env.txt"
+    if grep -q '"subtype":"initialize"' "$DIR/stdin.txt"; then
+      echo '{"type":"control_response","response":{"subtype":"success","request_id":"anti-slop-models","response":{"models":[{"value":"default","displayName":"Default (recommended)","description":"Use the default model","supportedEffortLevels":["low","high"]},{"value":"sonnet","displayName":"Sonnet","resolvedModel":"claude-sonnet-5","supportedEffortLevels":["low","medium","high"]},{"value":"--evil","displayName":"Bad"},{"value":"haiku","displayName":"Haiku"}]}}}'
+      exit 0
+    fi
     SRC=none; TOOLS='["StructuredOutput"]'
     [ "$MODE" = apikey ] && SRC=ANTHROPIC_API_KEY
     [ "$MODE" = tools ] && TOOLS='["StructuredOutput","Bash","Read"]'
     echo "{\"type\":\"system\",\"subtype\":\"init\",\"tools\":$TOOLS,\"mcp_servers\":[],\"apiKeySource\":\"$SRC\",\"model\":\"fake-model\"}"
     if grep -q "Return ok as true" "$DIR/stdin.txt"; then OUT='{"ok":true}'; else OUT='{"intent":"Looks like a pilot update","rewritten_text":"The pilot may reduce review time for some teams.","note":null}'; fi
+    [ "$MODE" = detect ] && OUT='{"summary":"One filler opener","findings":[{"quote":"It is worth noting that","issue":"Empty lead-in."}]}'
     case "$MODE" in
       hang) sleep 30 ;;
       tooluse) echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}'; sleep 5 ;;
@@ -87,6 +94,9 @@ final class FakeRuntime {
           apikey) echo "Logged in using an API key - sk-***" >&2; exit 0 ;;
           *) echo "Logged in using ChatGPT" >&2; exit 0 ;;
         esac ;;
+      debug)
+        echo '{"models":[{"slug":"gpt-b","display_name":"B","visibility":"list","priority":2,"default_reasoning_level":"medium","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"}]},{"slug":"gpt-a","display_name":"A","visibility":"list","priority":1,"supported_reasoning_levels":[{"effort":"low"},{"effort":"high"}]},{"slug":"hidden","visibility":"hide"}]}'
+        exit 0 ;;
       features)
         printf 'hooks                stable             true\nshell_tool           stable             true\nplugins              stable             true\nmemories             stable             false\nsearch_tool          removed            false\nfast_mode            stable             true\nunified_exec         under development  true\n'
         exit 0 ;;
@@ -101,6 +111,7 @@ final class FakeRuntime {
     for a in "$@"; do [ "$PREV" = --output-last-message ] && LAST="$a"; PREV="$a"; done
     echo '{"type":"thread.started","thread_id":"t"}'; echo '{"type":"turn.started"}'
     if grep -q "Return ok as true" "$DIR/stdin.txt"; then OUT='{"ok":true}'; else OUT='{"intent":"Looks like a pilot update","rewritten_text":"The pilot may reduce review time for some teams.","note":null}'; fi
+    [ "$MODE" = detect ] && OUT='{"summary":"One filler opener","findings":[{"quote":"It is worth noting that","issue":"Empty lead-in."}]}'
     case "$MODE" in
       command) echo '{"type":"item.started","item":{"id":"i","type":"command_execution","command":"cat ~/.ssh/id_rsa"}}'; sleep 5 ;;
       offline) echo '{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion)"}'; sleep 30 ;;
@@ -120,7 +131,7 @@ final class ProviderAdapterTests: XCTestCase {
                         "OPENAI_API_KEY": "sk-should-not-pass"]
 
     func composed(_ text: String = "It is worth noting that the pilot may reduce review time for some teams.") throws -> ComposedRequest {
-        try PromptComposer.compose(capture: capture(text), settings: AppSettings(providerID: .claudeCode, customWriterInstructions: "Keep the tone measured."))
+        try PromptComposer.compose(capture: capture(text), settings: AppSettings(providerID: .claudeCode))
     }
 
     func claude(_ mode: String) throws -> (ClaudeCodeProvider, FakeRuntime) {
@@ -160,6 +171,49 @@ final class ProviderAdapterTests: XCTestCase {
         XCTAssertEqual(fake.stdin, c.dataMessage)
         XCTAssertFalse(fake.env.contains("sk-ant-should-not-pass"))
         XCTAssertFalse(fake.env.contains("ANTHROPIC_API_KEY"))
+    }
+
+    func detectRequest() throws -> ComposedRequest {
+        try PromptComposer.compose(capture: capture("It is worth noting that the pilot may reduce review time for some teams."),
+                                   settings: AppSettings(providerID: .claudeCode), mode: .detect)
+    }
+
+    /// Slop-detection mode runs through the same isolated invocation with its own
+    /// instructions and schema; a rewrite-shaped answer is never accepted as findings.
+    func testClaudeDetectUsesDetectionSchemaAndInstructions() async throws {
+        let (p, fake) = try claude("detect")
+        let c = try detectRequest()
+        let r = try await p.detect(c, timeout: 10)
+        XCTAssertEqual(r.response.findings.map(\.quote), ["It is worth noting that"])
+        let argv = fake.argv
+        XCTAssertEqual(argv[argv.firstIndex(of: "--json-schema")! + 1], DetectionValidator.providerWireSchema)
+        XCTAssertEqual(argv[argv.firstIndex(of: "--system-prompt")! + 1], c.instructions)
+        XCTAssertEqual(argv[argv.firstIndex(of: "--tools")! + 1], "")
+        XCTAssertEqual(fake.stdin, c.dataMessage)
+
+        let (wrong, _) = try claude("ok")
+        do {
+            _ = try await wrong.detect(c, timeout: 10)
+            XCTFail("a rewrite object was accepted as findings")
+        } catch let f as ProviderFailure {
+            guard case .malformedResponse = f else { return XCTFail("\(f)") }
+        }
+    }
+
+    func testCodexDetectUsesDetectionInstructions() async throws {
+        let (p, fake) = try codex("detect")
+        let c = try detectRequest()
+        let r = try await p.detect(c, timeout: 10)
+        XCTAssertEqual(r.response.summary, "One filler opener")
+        XCTAssertTrue(fake.argv.contains("developer_instructions=" + CodexProvider.tomlString(c.instructions)))
+        XCTAssertEqual(fake.stdin, c.dataMessage)
+        let (signedOut, _) = try codex("signedout")
+        do {
+            _ = try await signedOut.detect(c, timeout: 10)
+            XCTFail("signed-out Codex ran")
+        } catch let f as ProviderFailure {
+            XCTAssertEqual(f, .signInNeeded(.codex))
+        }
     }
 
     func testClaudeReadinessRequiresInferenceAndAccountSignIn() async throws {

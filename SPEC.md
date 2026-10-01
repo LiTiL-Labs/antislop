@@ -1,5 +1,19 @@
 # Product specification
 
+## Current product revision — September 30, 2026
+
+The LiTiL Labs revision supersedes the historical profile/custom-instruction/model-control descriptions below. The implemented app lives in `app/`; this is no longer a specification-only checkout.
+
+- One hidden LiTiL Anti-Slop prompt combines the original editor with reviewed No AI Slop and Humanizer guidance. There are no selectable profiles or custom writer instructions. Em-dash removal is always on for editable prose; protected literals and legal meaning remain intact.
+- **Intelligence** chooses supported provider model/effort presets: Room Temp, Average, Smart, Genius. **Sentence Complexity** independently chooses Caveman, Plain, Balanced, Polished, Lawyer. These replace raw model/reasoning controls and Simplify wording/Keep my tone.
+- Sliders use their native theme below maximum. Genius adds a button-green track, stronger bloom and pixels, and a highlighted box; Lawyer uses orange. At maximum, color and effects fade from 50% alpha on the left to 100% on the right. Native thumbs stay centered and unclipped, and Reduce Motion removes particles. Screen titles use exact orange `#ED692B`; primary buttons use user-specified dark green `#102D23`.
+- The **Anti-Slop** Settings title stays pinned above the scrolling controls, just as Done stays pinned below. A resident menu-bar entry reopens Settings. **Launch at login** defaults on and registers through macOS when Done saves settings; registration failures and required OS approval remain visible.
+- The Settings footer links **LiTiL Labs - Law bro edition** to `https://litil.ai`. Unchanged MIT notices remain bundled as files; the licenses menu item and window are removed.
+- The two keybindings, exact original selection identity, explicit Apply, provider-owned authentication, legal fidelity and no-tool runtime restrictions remain required.
+
+See [app/README.md](app/README.md), [PROMPTING.md](PROMPTING.md) and [app/evidence/litil-revision.md](app/evidence/litil-revision.md) for current behavior and evidence. Historical requirements below apply only where compatible with this revision.
+
+
 ## Purpose and editorial position
 
 Anti-slop helps a writer remove formulaic filler, repetition, inflated wording and awkward boilerplate while retaining meaning and recognizable voice. Its model acts as a **context-aware copy editor**. It does not determine authorship, calculate an AI score or promise detection avoidance. An em dash is punctuation, not proof of authorship; explicit punctuation preferences may still affect editing.
@@ -33,7 +47,9 @@ The product should feel like a small native writing utility. The central experie
 3. Anti-slop captures the source and selection. When usable text is captured, the panel appears and reports context reading and rewriting only as those operations occur.
 4. A concise line, such as “Looks like a product update,” describes the inferred purpose. If evidence is insufficient, use “Context unclear.” Inferred intent is not presented as certain.
 5. The proposed text fills the editor. The user accepts it as-is or edits it. Source text remains unchanged.
-6. Clicking **Anti-slop**, or the proposed Command-Return accelerator, revalidates and replaces the exact original selection. Successful verification closes the panel.
+6. Clicking **Anti-slop**, or pressing the assigned anti-slop key again, revalidates and replaces the exact original selection. Successful verification closes the panel. (Command-Return applies only when no key is assigned.)
+
+**Slop-detection mode.** A second, separately assigned key opens the same panel as a **Slop check**: a one-line summary and the passages that read as filler, inflation or formula, each quoted exactly from the selection with the pattern named. It never changes the source and never scores or guesses authorship. **Anti-slop** (the button, or the anti-slop key) rewrites that same selection.
 
 ## Selection and context boundaries
 

@@ -79,7 +79,10 @@ public final class ClaudeCodeProvider: RewriteProvider, @unchecked Sendable {
         return out
     }
 
-    func arguments(runtime: Runtime, systemPrompt: String, schema: String) -> [String] {
+    /// `model`/`effort` are the writer's choice for this request; nil sends no flag
+    /// (the eval tool's `modelOverride` still applies when no choice is made).
+    func arguments(runtime: Runtime, systemPrompt: String, schema: String,
+                   model: String? = nil, effort: String? = nil) -> [String] {
         var args = ["--print", "--output-format", "stream-json", "--verbose",
                     "--json-schema", schema,
                     "--tools", "",
@@ -92,7 +95,8 @@ public final class ClaudeCodeProvider: RewriteProvider, @unchecked Sendable {
         if f.contains("--settings") { args += ["--settings", #"{"disableAllHooks":true}"#] }
         if f.contains("--disable-slash-commands") { args.append("--disable-slash-commands") }
         if f.contains("--permission-prompts") { args += ["--permission-prompts", "none"] }
-        if let modelOverride, f.contains("--model") { args += ["--model", modelOverride] }
+        if let model = model ?? modelOverride, f.contains("--model") { args += ["--model", model] }
+        if let effort, f.contains("--effort") { args += ["--effort", effort] }
         return args
     }
 
@@ -172,7 +176,8 @@ public final class ClaudeCodeProvider: RewriteProvider, @unchecked Sendable {
         let started = Date()
         let result = try await invoke(runtime: runtime, systemPrompt: composed.instructions,
                                       schema: ResponseValidator.providerWireSchema,
-                                      stdin: composed.dataMessage, timeout: timeout)
+                                      stdin: composed.dataMessage, timeout: timeout,
+                                      model: composed.model, effort: composed.reasoning, trace: composed.trace)
         switch ResponseValidator.validate(object: result.structured, originalSelection: composed.request.selectedText) {
         case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
         case .success(let response):
@@ -183,29 +188,93 @@ public final class ClaudeCodeProvider: RewriteProvider, @unchecked Sendable {
         }
     }
 
+    public func detect(_ composed: ComposedRequest, timeout: TimeInterval) async throws -> ProviderDetection {
+        let runtime: Runtime
+        switch await discover() {
+        case .failure(let f): throw f
+        case .success(let rt): runtime = rt
+        }
+        let started = Date()
+        let result = try await invoke(runtime: runtime, systemPrompt: composed.instructions,
+                                      schema: DetectionValidator.providerWireSchema,
+                                      stdin: composed.dataMessage, timeout: timeout,
+                                      model: composed.model, effort: composed.reasoning, trace: composed.trace)
+        switch DetectionValidator.validate(object: result.structured, originalSelection: composed.request.selectedText) {
+        case .failure(let e): throw ProviderFailure.malformedResponse(id, e)
+        case .success(let response):
+            let receipt = ProviderReceipt(provider: id.rawValue, runtimeVersion: runtime.version, model: result.model,
+                                          durationMs: Int(Date().timeIntervalSince(started) * 1000),
+                                          profile: composed.profile.rawValue, outcome: "ok")
+            return ProviderDetection(response: response, receipt: receipt)
+        }
+    }
+
+    /// Ask the runtime which models this account can use, through the same
+    /// `initialize` control handshake the Agent SDK uses. It runs no inference:
+    /// stdin closes after the one request, so the CLI answers and exits.
+    public func availableModels() async throws -> [ModelOption] {
+        let runtime: Runtime
+        switch await discover() {
+        case .failure(let f): throw f
+        case .success(let rt): runtime = rt
+        }
+        guard runtime.flags.contains("--input-format") else {
+            throw ProviderFailure.incompatibleRuntime(id, "no --input-format flag")
+        }
+        var args = ["--print", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+                    "--tools", "", "--strict-mcp-config", "--no-session-persistence"]
+        let f = runtime.flags
+        if f.contains("--safe-mode") { args.append("--safe-mode") }
+        if f.contains("--setting-sources") { args += ["--setting-sources", ""] }
+        if f.contains("--settings") { args += ["--settings", #"{"disableAllHooks":true}"#] }
+        if f.contains("--disable-slash-commands") { args.append("--disable-slash-commands") }
+        let requestID = "anti-slop-models"
+        let request = #"{"type":"control_request","request_id":"\#(requestID)","request":{"subtype":"initialize"}}"# + "\n"
+        let ws = try PrivateWorkspace.create()
+        defer { ws.remove() }
+        let spec = ProcessSpec(executable: runtime.executable, arguments: args,
+                               environment: environment(for: runtime.executable), workingDirectory: ws.url.path,
+                               stdin: Data(request.utf8), timeout: Limits.readinessTimeout)
+        guard let out = try? await ProcessRunner.run(spec) else { throw ProviderFailure.notInstalled(id) }
+        if out.stopReason == .timedOut { throw ProviderFailure.timedOut(id) }
+        guard let models = ModelCatalogParser.claudeInitialize(stdout: out.stdoutText, requestID: requestID) else {
+            throw FailureClassifier.classify(out.stderrText, provider: id)
+        }
+        return models
+    }
+
     struct InvocationResult {
         let structured: [String: Any]
         let model: String?
     }
 
-    func invoke(runtime: Runtime, systemPrompt: String, schema: String, stdin: String, timeout: TimeInterval) async throws -> InvocationResult {
+    func invoke(runtime: Runtime, systemPrompt: String, schema: String, stdin: String, timeout: TimeInterval,
+                model: String? = nil, effort: String? = nil,
+                trace: RequestTrace? = nil) async throws -> InvocationResult {
+        // A choice this runtime can't honor is an error, never silently dropped.
+        if model != nil, !runtime.flags.contains("--model") { throw ProviderFailure.incompatibleRuntime(id, "no --model flag") }
+        if effort != nil, !runtime.flags.contains("--effort") { throw ProviderFailure.incompatibleRuntime(id, "no --effort flag") }
         let ws = try PrivateWorkspace.create()
         defer { ws.remove() }
         let guardState = StreamGuard()
         let spec = ProcessSpec(
             executable: runtime.executable,
-            arguments: arguments(runtime: runtime, systemPrompt: systemPrompt, schema: schema),
+            arguments: arguments(runtime: runtime, systemPrompt: systemPrompt, schema: schema, model: model, effort: effort),
             environment: environment(for: runtime.executable),
             workingDirectory: ws.url.path,
             stdin: Data(stdin.utf8),
             timeout: timeout
         )
+        trace?.recordInvocation(executable: spec.executable, arguments: spec.arguments, schema: schema)
         let out: ProcessOutput
         do {
             out = try await ProcessRunner.run(spec) { line in guardState.inspect(line) }
         } catch {
             throw ProviderFailure.notInstalled(id)
         }
+        let structuredOutput = guardState.result?["structured_output"]
+        trace?.recordOutput(out, rawResponse: structuredOutput.map(RequestTrace.prettyJSON)
+                                ?? (guardState.result?["result"] as? String), reportedModel: guardState.model)
         switch out.stopReason {
         case .cancelled?: throw ProviderFailure.cancelled
         case .timedOut?: throw ProviderFailure.timedOut(id)
