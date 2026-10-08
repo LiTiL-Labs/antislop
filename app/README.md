@@ -59,7 +59,7 @@ swift run -c release antislop-axprobe e2e --app build/Anti-slop.app --live --pro
 
 `.claude/skills/anti-slop/` packages the same editing behavior as a skill, for use in a conversation instead of the Mac app. Claude Code sessions in this repository pick it up automatically. To use it elsewhere, copy the folder to `~/.claude/skills/anti-slop/`, or upload the packaged `.skill` file in Claude's skill settings.
 
-The skill carries the primary prompt's instruction body and both profiles' rule bodies verbatim, plus the MIT notices. It never calls a CLI or another model: the assistant that loads it does the editing itself. After changing anything in `../prompts` or `../third_party`, run `python3 scripts/sync-skill.py`. A unit test fails if the skill drifts. The evaluation harness and how to rerun it are in `scripts/skill-eval/README.md`.
+The skill carries the primary prompt's instruction body and both profiles' rule bodies verbatim, plus the MIT notices and the response schema. It never calls a CLI or another model: the assistant that loads it does the editing itself. After changing anything in `../prompts`, `../third_party` or `../schemas/rewrite-response.schema.json`, run `python3 scripts/sync-skill.py`. A unit test fails if the skill drifts. The evaluation harness, the helper-script tests and how to rerun them are in `scripts/skill-eval/README.md`; the latest results are in [evidence/skill-eval.md](evidence/skill-eval.md).
 
 ## Layout
 

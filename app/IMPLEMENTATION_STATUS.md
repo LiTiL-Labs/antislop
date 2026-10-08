@@ -1,6 +1,6 @@
 # Implementation status
 
-Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build and run instructions: [README.md](README.md).
+Updated October 8, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build and run instructions: [README.md](README.md).
 
 **Bottom line: MVP is not complete.** New real-UI checks on the macOS runner found and fixed a crash that ended the app right after every confirmed replacement (the text itself was always replaced correctly first). The app compiles on macOS. On a real macOS runner it captures and replaces TextEdit text with verified results, and the whole app loop has run end to end with the labelled fixture provider and, through each real provider adapter, with stub Claude Code and Codex runtimes. The Claude Code adapter has run live, 54 of 54 corpus requests, through the official CLI with its own account sign-in, but in the Linux development container, not inside the Mac app. **Codex has not run live**: this container's network policy blocks every OpenAI host. The combined "real provider + real Mac replacement" walkthrough and all human acceptance items still need the user's Mac.
 
@@ -8,7 +8,7 @@ Updated September 28, 2026. Branch `claude/anti-slop-macos-dev-ay9m4k`. Build an
 
 | Label | Meaning |
 |---|---|
-| **Auto** | XCTest suite (82 tests), run on Linux (Swift 6.1.3) and on macOS 15.7.9 (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow |
+| **Auto** | XCTest suite (83 tests), run on Linux (Swift 6.1.3). The macOS 15.7.9 runner (Xcode 16.4, Swift 6.1.2, arm64) in the `macOS build and checks` workflow last ran 82 of them; the newest, the skill drift test, is platform-independent. |
 | **Mac-CI** | `antislop-axprobe` on the GitHub-hosted macOS runner: real TextEdit, real Accessibility, real keyboard events, the real app bundle ([results](evidence/macos-ci.md)) |
 | **Fixture** | The development `FixtureProvider`, clearly labelled in the UI. It is never a live connection. |
 | **Stub-CI** | The real app on the macOS runner calling labelled stub `claude`/`codex` scripts through its real provider path ([results](evidence/macos-ci.md#full-app-live-mode-with-stub-runtimes-e2e---live-not-live-ai)). It proves the plumbing, not a live AI connection. |
@@ -108,6 +108,10 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 - Proxies are forwarded only if set in the app's environment. Corporate proxy setups configured only in shell profiles may need attention.
 - Latency: Claude Code median about 3.6 s (range 3.0–5.8 s) on the corpus. The rewrite timeout starts at 90 s.
 - Intent lines from the model are often longer and less tentative than the UX examples (see the [corpus review](evidence/claude-code-corpus-review.md)). A prompt 0.3 tweak is proposed, not made.
+
+## Anti-slop skill
+
+`.claude/skills/anti-slop/` packages the same editing contract for use in a Claude conversation, outside the Mac app. It never calls a CLI or another model, and it is not part of the MVP. A unit test keeps its prompt, profiles, notices and schema identical to the app's. In 54 blind-graded `claude -p` tests, the skill's replies kept meaning in all 54, against 17 of 54 without the skill, and gave one clean replacement in all 54, against 3 ([evaluation](evidence/skill-eval.md)). Those grades come from model judges; human review is still needed.
 
 ## CI note
 
