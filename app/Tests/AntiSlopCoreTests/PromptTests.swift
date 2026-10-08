@@ -12,6 +12,24 @@ final class EmbeddedPromptsTests: XCTestCase {
         XCTAssertEqual(EmbeddedPrompts.humanizerLicense, try Repo.text("third_party/humanizer/LICENSE"))
     }
 
+    /// The anti-slop Claude skill carries exactly the instruction and rule bodies
+    /// the app sends, plus the MIT notices. Run app/scripts/sync-skill.py after edits.
+    func testAntiSlopSkillCarriesTheAppsPromptAndProfilesVerbatim() throws {
+        let lib = PromptLibrary.bundled
+        let skill = ".claude/skills/anti-slop/"
+        let main = try Repo.text(skill + "SKILL.md")
+        XCTAssertTrue(main.contains("-->\n" + lib.primaryInstructions + "\n<!-- END canonical: prompts/primary.md -->"),
+                      "SKILL.md must carry the primary prompt's instruction body verbatim")
+        for (file, profile) in [("no-ai-slop", StyleProfileID.noAISlop), ("humanizer", .humanizer)] {
+            let text = try Repo.text(skill + "references/profiles/\(file).md")
+            let rules = try XCTUnwrap(lib.rules(for: profile))
+            XCTAssertTrue(text.contains("-->\n" + rules + "\n<!-- END canonical: prompts/profiles/\(file).md -->"),
+                          "\(file) profile must carry its rule body verbatim")
+        }
+        XCTAssertEqual(try Repo.text(skill + "licenses/no-ai-slop-LICENSE.txt"), try Repo.text("third_party/no-ai-slop/LICENSE"))
+        XCTAssertEqual(try Repo.text(skill + "licenses/humanizer-LICENSE.txt"), try Repo.text("third_party/humanizer/LICENSE"))
+    }
+
     func testLibraryExtractsInstructionAndRuleBodiesOnly() throws {
         let lib = PromptLibrary.bundled
         XCTAssertTrue(lib.primaryInstructions.hasPrefix("You are Anti-slop, a context-aware copy editor."))
