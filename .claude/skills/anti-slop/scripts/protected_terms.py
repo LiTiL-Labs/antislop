@@ -112,6 +112,9 @@ def terms(text: str) -> Counter:
         if not starts_sentence(text, m.start()):
             found[word] += 1
             continue
+        if word.lower() in CITATION_SIGNALS:
+            # "See Smith v. Jones": a signal opening a citation, not the start of a name.
+            continue
         nxt = re.match(r"[ \t]+([^\W\d_])", text[m.end():])
         if nxt and nxt.group(1).isupper():
             # "Acme LLC", "Émilie Dupont" at a sentence start: the name continues.

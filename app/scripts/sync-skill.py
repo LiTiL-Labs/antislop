@@ -4,7 +4,8 @@
 The skill (default: .claude/skills/anti-slop) carries the primary prompt's
 instruction body and each reviewed profile's rule body verbatim, between
 BEGIN/END canonical markers, plus byte-identical copies of the upstream MIT
-notices. This script refreshes those regions from ../prompts and ../third_party,
+notices and the response schema. This script refreshes those from ../prompts,
+../third_party and ../schemas,
 using the same section rule as PromptLibrary.section: the text after
 "## <name>" up to the next level-2 heading, trimmed.
 
@@ -25,9 +26,11 @@ BLOCKS = [
     ("references/profiles/no-ai-slop.md", "prompts/profiles/no-ai-slop.md", "Editorial rule body"),
     ("references/profiles/humanizer.md", "prompts/profiles/humanizer.md", "Editorial rule body"),
 ]
-LICENSES = [
+# (file inside the skill, byte-identical source relative to the repo root)
+COPIES = [
     ("licenses/no-ai-slop-LICENSE.txt", "third_party/no-ai-slop/LICENSE"),
     ("licenses/humanizer-LICENSE.txt", "third_party/humanizer/LICENSE"),
+    ("references/response-schema.json", "schemas/rewrite-response.schema.json"),
 ]
 
 
@@ -77,7 +80,7 @@ def main() -> int:
             if not args.check:
                 path.write_text(updated, encoding="utf-8")
 
-    for rel, source in LICENSES:
+    for rel, source in COPIES:
         path = skill / rel
         data = (ROOT / source).read_bytes()
         if not path.exists() or path.read_bytes() != data:
@@ -104,7 +107,7 @@ def main() -> int:
             print("anti-slop skill has drifted from the canonical sources: " + ", ".join(drift))
             print("run: python3 app/scripts/sync-skill.py")
             return 1
-        print("anti-slop skill matches prompts/ and third_party/ notices")
+        print("anti-slop skill matches prompts/, third_party/ notices and the response schema")
         return 0
     print("refreshed: " + (", ".join(drift) if drift else "nothing (already in sync)"))
     return 0

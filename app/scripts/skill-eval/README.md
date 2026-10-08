@@ -33,6 +33,8 @@ The test set is `.claude/skills/anti-slop/evals/evals.json`: the 18 cases in `fi
 
    Then use skill-creator's `scripts/aggregate_benchmark.py` and `eval-viewer/generate_review.py --static` for the benchmark and a review page.
 
+`test_skill_scripts.py` is a stdlib unit test for the skill's two helpers (`protected_terms.py` and `validate_response.py`), including a check that the validator's keys and limits match `schemas/rewrite-response.schema.json`. Run `python3 app/scripts/skill-eval/test_skill_scripts.py` after changing either script.
+
 `trigger-eval.json` holds 20 realistic requests, 10 that should use the skill and 10 near-misses that should not (AI detection, new writing, summaries, translation, fact-checking, code cleanup, typo-only proofreading). Use it with skill-creator's `scripts/run_eval.py`. Run that from an empty folder that contains only `.claude/`, so its temporary command file lands there and not in this repository.
 
 Grades come from model judges, not people. Human review of meaning and voice, especially on the legal cases, is still required before claiming editorial quality (see PROMPTING.md).

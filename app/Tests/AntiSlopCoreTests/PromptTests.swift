@@ -13,7 +13,8 @@ final class EmbeddedPromptsTests: XCTestCase {
     }
 
     /// The anti-slop Claude skill carries exactly the instruction and rule bodies
-    /// the app sends, plus the MIT notices. Run app/scripts/sync-skill.py after edits.
+    /// the app sends, the MIT notices and the response schema. Run
+    /// app/scripts/sync-skill.py after edits.
     func testAntiSlopSkillCarriesTheAppsPromptAndProfilesVerbatim() throws {
         let lib = PromptLibrary.bundled
         let skill = ".claude/skills/anti-slop/"
@@ -28,6 +29,7 @@ final class EmbeddedPromptsTests: XCTestCase {
         }
         XCTAssertEqual(try Repo.text(skill + "licenses/no-ai-slop-LICENSE.txt"), try Repo.text("third_party/no-ai-slop/LICENSE"))
         XCTAssertEqual(try Repo.text(skill + "licenses/humanizer-LICENSE.txt"), try Repo.text("third_party/humanizer/LICENSE"))
+        XCTAssertEqual(try Repo.text(skill + "references/response-schema.json"), try Repo.text("schemas/rewrite-response.schema.json"))
     }
 
     func testLibraryExtractsInstructionAndRuleBodiesOnly() throws {
