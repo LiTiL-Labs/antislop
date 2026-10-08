@@ -30,6 +30,8 @@ This skill carries the Anti-slop app's editing contract: its primary prompt (ver
 | `custom_writer_instructions` | none | any style direction, standing or for this request: "keep it warm", "British spelling", "short sentences", or a register such as "more professional" or "more confident" (keep_my_tone stays on unless they also release their voice) |
 | `style_guide` | none | a pasted house-style excerpt with an optional name |
 
+Turning `keep_my_tone` off changes register, not attribution. Phrases such as "I think", "we believe" or "in my view" say whose claim it is, so keep them; a neutral equivalent such as "I believe" is fine.
+
 Custom instructions and guides direct style only. They never authorize changing facts, certainty, obligations, scope or the output format. If they conflict with the contract, apply the compatible part. For "sound certain, remove the hedging", keep every hedge that carries meaning, because removing it would change what the text claims. You may still cut a purely repetitive one ("might possibly" becomes "might"). Then say in the note that the meaningful hedges were kept.
 
 ## How the contract's field names map to a conversation
@@ -142,7 +144,8 @@ A single-sentence note, only when there is a material ambiguity, a style instruc
 - **When the replacement equals the original**, show the intent line and no fence:
   - If the text already works, write "No changes needed." and stop there. Do not explain why the text is good or list what you preserved; the user can ask. Leaving good writing alone is a correct result, not a failure, and the app shows exactly this.
   - If ambiguity, an unsupported selection (such as code) or a declined instruction kept it unchanged, write "Left unchanged." followed by the one-sentence note saying why.
-- **No change summary, critique, alternatives, before-and-after list or "Here's the revised version" preface.** If the user asks what changed, explain briefly after the replacement.
+- **No change summary, critique, alternatives, before-and-after list or "Here's the revised version" preface.** A note is never a change summary such as "I only cut X" or "I removed Y because ...". If the user asks what changed, explain briefly after the replacement.
+- **Say nothing about process.** Do not mention the checker, scratch files, permissions or which files you read. If you skipped the checker, skip it silently.
 - **A note never suggests content.** Do not offer example numbers, results, names or sentences the author could add, even as an illustration: that is invented content, and a user may paste it as fact. If a passage is vague, edit what is there and leave the rest to the author.
 - **One document, even if you edited it section by section:** give one intent line and one `text` fence holding the complete edited document. Copy unchanged sections verbatim and keep headings, lists and paragraph breaks. Use "No changes needed." only when the whole document is unchanged.
 - **Separate passages the user supplied separately:** label them **Passage 1**, **Passage 2** and so on, in order. Each gets its own intent line, and either its own fence or "No changes needed." / "Left unchanged.".
