@@ -1,0 +1,22 @@
+[
+  {"query": "ugh my manager says my weekly update sounds like chatgpt wrote it. can you fix it without changing what it actually says? \"In this week's update, I wanted to take a moment to highlight that the migration effort continues to make meaningful progress across a wide range of workstreams, and we remain committed to delivering value.\"", "should_trigger": true},
+  {"query": "Can you de-slop this paragraph from our Q3 board memo before I send it tonight? It's the one about churn: \"It's important to note that, in today's competitive landscape, our churn initiatives have the potential to unlock significant value, although results to date remain preliminary.\"", "should_trigger": true},
+  {"query": "tighten this clause from the vendor MSA, it's super wordy but I can't change what it means legally: \"Notwithstanding anything to the contrary herein, the Vendor shall, at its sole cost and expense, promptly notify the Customer in writing of any Security Incident within 72 hours of discovery thereof.\"", "should_trigger": true},
+  {"query": "humanize this linkedin post a bit, it's way too corporate and has that AI vibe: \"Thrilled to announce that I'm embarking on an exciting new chapter! Grateful for the journey, humbled by the opportunity, and ready to drive impact.\"", "should_trigger": true},
+  {"query": "The intro of docs/posts/launch.md (first two paragraphs) reads like marketing filler. Make it less robotic but keep my voice and don't touch the rest of the file.", "should_trigger": true},
+  {"query": "clean up this cover letter paragraph, too many buzzwords and it sounds generic: \"I am a results-driven, detail-oriented professional with a proven track record of leveraging cross-functional synergies to deliver best-in-class outcomes.\"", "should_trigger": true},
+  {"query": "Our support macro reads like AI slop. Rewrite it so it's direct, and no em dashes please: \"We truly appreciate your patience — rest assured, our dedicated team is working tirelessly to resolve your issue as quickly as possible!\"", "should_trigger": true},
+  {"query": "edit this memo sentence for clarity but do not touch the citation or the hedge: \"It is worth noting that, as the court appears to have held in Smith v. Jones, 123 F.3d 456 (8th Cir. 1997), the duty may extend to subcontractors.\"", "should_trigger": true},
+  {"query": "can u polish this email to my landlord, it sounds stiff and weirdly formal: \"I am writing to formally bring to your attention that the radiator in unit 4B has not been functioning since October 3rd.\"", "should_trigger": true},
+  {"query": "Give me the Anti-slop JSON response (intent, rewritten_text, note) for this selection: \"In conclusion, it is clear that the new onboarding flow is a game-changer for some users.\"", "should_trigger": true},
+  {"query": "Is this paragraph AI-generated? A student turned it in for my history class and I want a probability score before I talk to them.", "should_trigger": false},
+  {"query": "Write a LinkedIn post announcing that our startup closed a $4M seed round led by Northwind Ventures. Upbeat but not cringe.", "should_trigger": false},
+  {"query": "Summarize this 3-page services agreement into 5 bullet points my boss can skim before the call: [pasted agreement text about payment terms, SLAs, termination and liability caps]", "should_trigger": false},
+  {"query": "Translate this paragraph into Spanish for our Madrid office: \"The quarterly review is moved to Thursday. Please bring your updated forecasts.\"", "should_trigger": false},
+  {"query": "Fact-check this press release for me, are these market-size numbers right? \"The global widget market reached $48B in 2025, growing 31% year over year.\"", "should_trigger": false},
+  {"query": "what's the actual legal difference between shall, must and may in a commercial contract? our counsel keeps redlining them", "should_trigger": false},
+  {"query": "clean up this python function, it's messy and repetitive: def total(xs):\n    t = 0\n    for x in xs:\n        t = t + x\n    return t", "should_trigger": false},
+  {"query": "Proofread my resume for spelling and typos ONLY, do not change any wording at all. It's in resume.txt.", "should_trigger": false},
+  {"query": "Turn these meeting notes into a full paragraph for the project report: - vendor delayed - new date Nov 12 - budget unchanged - QA starts after", "should_trigger": false},
+  {"query": "Write me a 500-word essay on climate policy that won't get flagged by AI detectors like GPTZero.", "should_trigger": false}
+]

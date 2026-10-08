@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Anti-slop model response 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "intent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "rewritten_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40000
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "intent",
+    "rewritten_text",
+    "note"
+  ]
+}
