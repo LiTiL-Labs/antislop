@@ -123,7 +123,7 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 
 ## Anti-slop skill
 
-`.claude/skills/anti-slop/` packages the same editing contract for use in a Claude conversation, outside the Mac app. It never calls a CLI or another model, and it is not part of the MVP. A unit test keeps its prompt, profiles, notices and schema identical to the app's. In 54 blind-graded `claude -p` tests, the skill's replies kept meaning in all 54, against 17 of 54 without the skill, and gave one clean replacement in all 54, against 3 ([evaluation](evidence/skill-eval.md)). Those grades come from model judges; human review is still needed.
+`.claude/skills/anti-slop/` packages the same editing contract (consolidated prompt 0.3 and the Sentence Complexity levels) for use in a Claude conversation, outside the Mac app. It never calls a CLI or another model, and it is not part of the MVP. A unit test keeps its prompt, complexity guidance, notices and schema identical to the app's. **The 0.3 skill has not been evaluated live.** The recorded evaluation is historical: it measured the earlier prompt 0.2 skill, whose replies kept meaning in all 54 blind-graded `claude -p` tests, against 17 of 54 without the skill ([evaluation](evidence/skill-eval.md)). Those grades came from model judges; human review is still needed.
 
 ## CI note
 

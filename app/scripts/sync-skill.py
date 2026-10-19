@@ -2,11 +2,11 @@
 """Keep the anti-slop skill in step with the canonical prompt sources.
 
 The skill (default: .claude/skills/anti-slop) carries the primary prompt's
-instruction body and each reviewed profile's rule body verbatim, between
+instruction body and the app's Sentence Complexity guidance verbatim, between
 BEGIN/END canonical markers, plus byte-identical copies of the upstream MIT
 notices and the response schema. This script refreshes those from ../prompts,
-../third_party and ../schemas,
-using the same section rule as PromptLibrary.section: the text after
+the SentenceComplexity enum in Contracts.swift, ../third_party and ../schemas.
+Prompt sections use the same rule as PromptLibrary.section: the text after
 "## <name>" up to the next level-2 heading, trimmed.
 
     python3 app/scripts/sync-skill.py            # refresh the skill in place
@@ -23,9 +23,10 @@ ROOT = Path(__file__).resolve().parents[2]
 # (file inside the skill, canonical source relative to the repo root, section name)
 BLOCKS = [
     ("SKILL.md", "prompts/primary.md", "Instruction body"),
-    ("references/profiles/no-ai-slop.md", "prompts/profiles/no-ai-slop.md", "Editorial rule body"),
-    ("references/profiles/humanizer.md", "prompts/profiles/humanizer.md", "Editorial rule body"),
 ]
+CONTRACTS = "app/Sources/AntiSlopCore/Models/Contracts.swift"
+# Marker name of the Sentence Complexity block in SKILL.md.
+COMPLEXITY = "SentenceComplexity.guidance"
 # (file inside the skill, byte-identical source relative to the repo root)
 COPIES = [
     ("licenses/no-ai-slop-LICENSE.txt", "third_party/no-ai-slop/LICENSE"),
@@ -49,6 +50,25 @@ def section(markdown: str, name: str) -> str:
     if not text:
         sys.exit(f"empty section '## {name}'")
     return text
+
+
+def complexity_guidance(swift: str) -> str:
+    """One "- **Name:** guidance" line per SentenceComplexity case, in declaration order.
+
+    Mirrors SentenceComplexity.displayName (rawValue.capitalized) and .guidance.
+    """
+    m = re.search(r"public enum SentenceComplexity\b.*?\n}\n", swift, re.S)
+    if not m:
+        sys.exit(f"{CONTRACTS}: missing enum SentenceComplexity")
+    enum = m.group(0)
+    decl = re.search(r"^\s*case ([a-z][A-Za-z, ]*)$", enum, re.M)
+    if not decl:
+        sys.exit(f"{CONTRACTS}: missing SentenceComplexity case list")
+    names = [n.strip() for n in decl.group(1).split(",")]
+    guidance = dict(re.findall(r'case \.(\w+): return "([^"\\]*)"', enum))
+    if set(guidance) != set(names):
+        sys.exit(f"{CONTRACTS}: SentenceComplexity guidance must be plain literals for every case {names}")
+    return "\n".join(f"- **{n.capitalize()}:** {guidance[n]}" for n in names)
 
 
 def fill(doc: str, source: str, body: str, where: str) -> str:
@@ -80,6 +100,15 @@ def main() -> int:
             if not args.check:
                 path.write_text(updated, encoding="utf-8")
 
+    path = skill / "SKILL.md"
+    current = path.read_text(encoding="utf-8")
+    body = complexity_guidance((ROOT / CONTRACTS).read_text(encoding="utf-8"))
+    updated = fill(current, COMPLEXITY, body, "SKILL.md")
+    if updated != current:
+        drift.append(f"SKILL.md ({COMPLEXITY})")
+        if not args.check:
+            path.write_text(updated, encoding="utf-8")
+
     for rel, source in COPIES:
         path = skill / rel
         data = (ROOT / source).read_bytes()
@@ -107,7 +136,7 @@ def main() -> int:
             print("anti-slop skill has drifted from the canonical sources: " + ", ".join(drift))
             print("run: python3 app/scripts/sync-skill.py")
             return 1
-        print("anti-slop skill matches prompts/, third_party/ notices and the response schema")
+        print("anti-slop skill matches prompts/, the Sentence Complexity guidance, third_party/ notices and the response schema")
         return 0
     print("refreshed: " + (", ".join(drift) if drift else "nothing (already in sync)"))
     return 0

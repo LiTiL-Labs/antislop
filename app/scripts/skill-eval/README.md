@@ -2,7 +2,7 @@
 
 Maintainer tooling for `.claude/skills/anti-slop`. Nothing here ships in the skill: the skill itself never calls a CLI or another model. These scripts stand in for a user, sending each test request through a real `claude -p` session with and without the skill installed, then blind-grading the answers.
 
-The test set is `.claude/skills/anti-slop/evals/evals.json`: the 18 cases in `fixtures/editorial-cases.json`, each phrased as a person would ask, under each style (No AI Slop, Humanizer, core only). That makes 54 tests. Run it after any change to `prompts/`, the profiles or `SKILL.md`. It uses the signed-in Claude Code account and synthetic fixture text only.
+The test set is `.claude/skills/anti-slop/evals/evals.json`: the 18 cases in `fixtures/editorial-cases.json`, each phrased as a person would ask, at three Sentence Complexity levels (Balanced, Caveman, Lawyer). That makes 54 tests. Four fixture review rules that named settings prompt 0.3 removed are restated in the eval set. Run it after any change to `prompts/`, the Sentence Complexity guidance or `SKILL.md`. The last recorded run ([evidence/skill-eval.md](../../evidence/skill-eval.md)) predates prompt 0.3 and is historical. It uses the signed-in Claude Code account and synthetic fixture text only.
 
 1. **Run the sessions** (about 5 minutes at six at a time):
 

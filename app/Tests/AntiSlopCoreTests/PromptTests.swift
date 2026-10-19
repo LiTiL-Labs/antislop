@@ -20,6 +20,22 @@ final class EmbeddedPromptsTests: XCTestCase {
         XCTAssertFalse(p.contains("reviewed_profile_rules"))
     }
 
+    /// The anti-slop Claude skill carries exactly the instruction body and Sentence
+    /// Complexity guidance the app sends, the MIT notices and the response schema.
+    /// Run app/scripts/sync-skill.py after edits.
+    func testAntiSlopSkillCarriesTheAppsPromptAndComplexityVerbatim() throws {
+        let skill = ".claude/skills/anti-slop/"
+        let main = try Repo.text(skill + "SKILL.md")
+        XCTAssertTrue(main.contains("-->\n" + PromptLibrary.bundled.primaryInstructions + "\n<!-- END canonical: prompts/primary.md -->"),
+                      "SKILL.md must carry the primary prompt's instruction body verbatim")
+        let levels = SentenceComplexity.allCases.map { "- **\($0.displayName):** \($0.guidance)" }.joined(separator: "\n")
+        XCTAssertTrue(main.contains("-->\n" + levels + "\n<!-- END canonical: SentenceComplexity.guidance -->"),
+                      "SKILL.md must carry every Sentence Complexity level's guidance verbatim")
+        XCTAssertEqual(try Repo.text(skill + "licenses/no-ai-slop-LICENSE.txt"), try Repo.text("third_party/no-ai-slop/LICENSE"))
+        XCTAssertEqual(try Repo.text(skill + "licenses/humanizer-LICENSE.txt"), try Repo.text("third_party/humanizer/LICENSE"))
+        XCTAssertEqual(try Repo.text(skill + "references/response-schema.json"), try Repo.text("schemas/rewrite-response.schema.json"))
+    }
+
     func testMalformedPromptSourcesAreRejected() {
         XCTAssertThrowsError(try PromptLibrary(primaryMarkdown: "# Internal primary prompt — version 0.2\n"))
         XCTAssertThrowsError(try PromptLibrary(primaryMarkdown: "# Internal primary prompt — version 0.3\n\nno body"))

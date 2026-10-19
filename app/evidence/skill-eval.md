@@ -1,5 +1,7 @@
 # Anti-slop skill — evaluation
 
+> **Historical (October 19, 2026).** This evaluation measured the skill as built for primary prompt 0.2, with its No AI Slop, Humanizer and core-only styles. The skill now carries the consolidated LiTiL prompt 0.3 and the five Sentence Complexity levels, and `evals/evals.json` now holds the 18 cases under Balanced, Caveman and Lawyer. The 0.3 skill has not been evaluated yet, so nothing below describes it.
+
 The skill is `.claude/skills/anti-slop/`. It carries the primary prompt 0.2 instruction body and both reviewed 0.2 profile rule bodies verbatim, kept in step by `scripts/sync-skill.py` and a unit test. The harness that produced these results is in [`scripts/skill-eval/`](../scripts/skill-eval/README.md). Round 3's per-test results and replies are in [live/skill-eval-round3.json](live/skill-eval-round3.json).
 
 | Item | Value |
