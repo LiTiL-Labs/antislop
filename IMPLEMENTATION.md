@@ -38,15 +38,15 @@ Exit: a runnable local build and a brief exact walkthrough with the actual provi
 
 Finish the second required provider adapter. Provide separate connection readiness, normal sign-in/Manage and error recovery. Ensure a user's provider choice is honored, not silently substituted. Prove account-backed behavior without accidental API-key billing. No token-entry UI.
 
-Complete persistence and atomic Done behavior for arbitrary supported key/combination, No AI Slop/Humanizer/None, Simplify wording, Keep my tone, optional guide and custom writer instructions. Remove/reassign a shortcut without losing settings access. Changes affect subsequent rewrites, preserving any current edited draft.
+Complete persistence and atomic Done behavior for arbitrary supported key/combination (anti-slop and slop-detection keys), Intelligence, Sentence Complexity, optional guide and Launch at login. (Revised September 30, 2026: this replaces No AI Slop/Humanizer/None, Simplify wording, Keep my tone and custom writer instructions.) Remove/reassign a shortcut without losing settings access. Changes affect subsequent rewrites, preserving any current edited draft.
 
-Exit: both providers pass real readiness and rewrite checks; restart preserves settings; selecting each profile demonstrably changes composition; core prompt remains internal. A Claude Code implementation blocker is an explicit incomplete MVP requirement, never grounds for declaring a Codex-only MVP finished.
+Exit: both providers pass real readiness and rewrite checks; restart preserves settings; selecting each Sentence Complexity level demonstrably changes composition; core prompt remains internal. A Claude Code implementation blocker is an explicit incomplete MVP requirement, never grounds for declaring a Codex-only MVP finished.
 
 ## Slice 3 — context, editorial fidelity and resilient transactions
 
 Implement bounded before/after context, unknown-boundary handling, source hints and exact partial-selection preservation. Add schema/size validation, cancellation, duplicate-trigger protection, session/edit revisions, clipboard concurrency and target drift checks. Confirm code/protected quotes are not rewritten.
 
-Run the authored corpus across both providers and all three profile states. Examine legal defined terms, shall/must/may, obligations, parties, dates, exceptions, citations and cross-references. Investigate all material fidelity failures and revise prompts/profile rules conservatively. Meaning violations block completion even when prose sounds smoother.
+Run the authored corpus across both providers under the consolidated prompt (before September 30, 2026: across all three profile states). Examine legal defined terms, shall/must/may, obligations, parties, dates, exceptions, citations and cross-references. Investigate all material fidelity failures and revise the prompt conservatively. Meaning violations block completion even when prose sounds smoother.
 
 Exit: meaningful automated checks and a recorded live editorial sample distinguish acceptable alternatives from failures. Tests cover adverse provider and target states, not just the normal example.
 

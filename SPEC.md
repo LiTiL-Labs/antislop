@@ -35,7 +35,7 @@ The product should feel like a small native writing utility. The central experie
 | P09 | Validate the original target immediately before applying; dismiss only after confirmed replacement. |
 | P10 | Close/Escape cancels without changing the source. Failure or stale source retains the useful draft. |
 | P11 | First launch opens the same settings screen later available through the panel gear and a persistent app/menu entry. |
-| P12 | Settings support connection readiness, shortcut assignment, No AI Slop/Humanizer/None, simpler wording, an optional guide, and custom writing instructions. |
+| P12 | Settings support connection readiness, anti-slop and slop-detection key assignment, Intelligence, Sentence Complexity, an optional guide and Launch at login. (Revised September 30, 2026: this replaces the No AI Slop/Humanizer/None choice, simpler wording and custom writing instructions.) |
 | P13 | The primary prompt is internal and developer-versioned. Normal product UI exposes only concise settings. |
 | P14 | Support both Codex and Claude Code through official local runtimes and the user's own normal sign-in; no API-token entry in initial UI. |
 | P15 | Preserve legal-professional wording and effects: defined terms, obligations, permissions, party names, dates, conditions, citations and cross-references. |
