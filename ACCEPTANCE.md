@@ -34,8 +34,8 @@ All product checks below are **not run in this handoff**. The package includes p
 | A12 | Supported selected prose | Exact selection and available bounds captured before panel focus | Real source |
 | A13 | Context absent or partly available | Unknown represented explicitly; conservative edit; intent tentative | Contract + live model |
 | A14 | Partial word/sentence plus boundary spaces | Only selection replaced; grammatical join and necessary spaces preserved | Unit + live source/model |
-| A15 | Change selected profile or choose None | Exactly the matching bundled rule body, or no profile, enters the request | Automated composition |
-| A16 | Save/clear custom instructions or guide | Next request includes exact saved text or none; current draft unchanged | Automated + UI |
+| A15 | Change Sentence Complexity | Exactly the matching level's guidance enters the request with the one consolidated prompt (Revised September 30, 2026; previously: change the selected profile or choose None) | Automated composition |
+| A16 | Save/clear the guide | Next request includes exact saved text or none; current draft unchanged (custom instructions were removed September 30, 2026) | Automated + UI |
 | A17 | Custom instructions conflict with uncertainty/obligation | Core fidelity wins; compatible style portion applies | Both live providers |
 | A18 | Keep my tone on/off | On retains authorial register; off may neutralize it without inventing personality or changing claims | Live model + human |
 | A19 | Ordinary rewrite | One validated intent/replacement/note object; no critique in replacement | Automated + both live |
@@ -56,21 +56,21 @@ All product checks below are **not run in this handoff**. The package includes p
 | A34 | Malformed/extra/empty/oversized response, timeout or cancellation | Never inserted; concise retry/recovery; no implicit provider switch | Automated adapter |
 | A35 | Selection near screen edge or on another display | Visible bounded panel; avoid covering selection when feasible; fallback honest | Real displays |
 | A36 | Keyboard and screen reader; increased text; reduce motion/transparency | Named controls, coherent focus, readable layout, appropriate announcements and system preferences | Human accessibility |
-| A37 | Settings and panel inspection | Custom instructions present; core prompt remains internal; both provider choices and final two profiles present | Human UI review |
+| A37 | Settings and panel inspection | Core prompt remains internal; both provider choices, Intelligence and Sentence Complexity present; no profile choice or custom instructions (Revised September 30, 2026) | Human UI review |
 | A38 | Diagnostic/output review | No document text, writer instructions, clipboard or credentials in default logs | Code + runtime check |
 
 ## Editorial evaluation protocol
 
-Run [18 cases](fixtures/editorial-cases.json) with Codex and Claude Code using No AI Slop, Humanizer and None. Record which combinations actually ran and the exact available model/runtime versions. Review factual/legal invariants before judging smoothness or brevity. Treat stylistic example outputs as examples, not the sole correct strings.
+Run [18 cases](fixtures/editorial-cases.json) with Codex and Claude Code under the consolidated LiTiL prompt (before September 30, 2026: under No AI Slop, Humanizer and None). Record which runs actually happened, the Sentence Complexity level and the exact available model/runtime versions. Review factual/legal invariants before judging smoothness or brevity. Treat stylistic example outputs as examples, not the sole correct strings.
 
 The initial target is zero material fidelity violations in the representative corpus. Passing this small corpus does not prove universal correctness. Add regression cases for failures observed during human use; protect approved source material appropriately. No AI detector score is an acceptance measure.
 
 ## Real end-to-end walkthrough
 
-1. Launch the local build; use the single settings screen to select a ready provider and assign a supported key. Save one custom writer preference.
+1. Launch the local build; use the single settings screen to select a ready provider and assign a supported key. Choose a non-default Sentence Complexity level.
 2. Open the declared external plain-text baseline, enter a test paragraph with meaningful hedging, select a middle passage and trigger the app.
 3. Verify the panel's placement/progress, read the tentative intent, edit one word in the proposal and apply. Confirm the exact replacement and unchanged surrounding text. Test native undo.
-4. Repeat with the other required provider, then with Humanizer and core-only. Confirm the saved custom preference appears in behavior/composition.
+4. Repeat with the other required provider, then with another Sentence Complexity level. Confirm the saved level appears in behavior/composition. (Before September 30, 2026 this step used Humanizer, core-only and a custom writer preference.)
 5. During another request, change the original selection or focus an unrelated field. Apply must not insert there; the draft stays available.
 6. Exercise cancel, expired/failed connection, malformed fixture response and failed replacement. Ensure each source remains safe and failure does not destroy edits.
 7. Check a legal clause with defined terms, a shall/may distinction and a citation. Review the resulting effect, not just literal token presence.
