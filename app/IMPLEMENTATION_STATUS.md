@@ -121,6 +121,10 @@ codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignor
 - Latency: Claude Code median about 3.6 s (range 3.0–5.8 s) on the corpus. The rewrite timeout starts at 90 s.
 - Intent lines from the model are often longer and less tentative than the UX examples (see the [corpus review](evidence/claude-code-corpus-review.md)). A prompt 0.3 tweak is proposed, not made.
 
+## Anti-slop skill
+
+`.claude/skills/anti-slop/` packages the same editing contract (consolidated prompt 0.3 and the Sentence Complexity levels) for use in a Claude conversation, outside the Mac app. It never calls a CLI or another model, and it is not part of the MVP. A unit test keeps its prompt, complexity guidance, notices and schema identical to the app's. The 0.3 skill was evaluated live on October 19, 2026: 54 blind-graded `claude -p` tests (18 cases at Balanced, Caveman and Lawyer) on Claude Code CLI 2.1.303. Replies with the skill kept meaning in 51 of 54 tests and met every expectation in 48, against 13 and 0 without the skill ([evaluation](evidence/skill-eval-0.3.md)). One session did not load the skill and dropped a hedge. Four misses were Caveman or Lawyer edits to text that needed none. One was only a required phrase that the reply capitalized. Those grades came from model judges, one run per test; human review is still needed. The earlier prompt 0.2 evaluation is kept as a historical record ([skill-eval.md](evidence/skill-eval.md)).
+
 ## CI note
 
 `.github/workflows/macos.yml` runs on pushes to this development branch that touch `app/`, `prompts/`, `fixtures/`, `schemas/` or `third_party/`, and on manual dispatch. It uses a GitHub-hosted macOS runner (about 2 minutes a run; macOS minutes count at a multiple of Linux minutes on private repositories), plus four short Linux jobs that print screenshots into their logs. No secrets are used, and no provider credentials exist in CI. Remove or narrow the workflow if you don't want it to spend Actions minutes.

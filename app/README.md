@@ -68,6 +68,12 @@ swift run -c release antislop-axprobe e2e --app build/Anti-slop.app --live --pro
 
 `antislop-eval` sends the synthetic fixture corpus (`../fixtures/editorial-cases.json`) through the same provider adapters the app uses. Never point it at private text. `antislop-axprobe` needs Accessibility permission for the terminal that runs it. It opens its own temporary TextEdit documents and checks capture, verified replacement, undo, selection/text/focus drift and the clipboard fallback. `--allow-quit-textedit` also force-quits TextEdit to test the closed-app case, so use it only when no documents of yours are open.
 
+## Anti-slop as a Claude skill
+
+`.claude/skills/anti-slop/` packages the same editing behavior as a skill, for use in a conversation instead of the Mac app. Claude Code sessions in this repository pick it up automatically. To use it elsewhere, copy the folder to `~/.claude/skills/anti-slop/`, or upload the packaged `.skill` file in Claude's skill settings.
+
+The skill carries the consolidated primary prompt's instruction body and every Sentence Complexity level's guidance verbatim, plus the MIT notices and the response schema. It never calls a CLI or another model: the assistant that loads it does the editing itself. After changing anything in `../prompts`, the `SentenceComplexity` guidance in `Sources/AntiSlopCore/Models/Contracts.swift`, `../third_party` or `../schemas/rewrite-response.schema.json`, run `python3 scripts/sync-skill.py`. A unit test fails if the skill drifts. The evaluation harness, the helper-script tests and how to rerun them are in `scripts/skill-eval/README.md`. The latest evaluation, of the prompt 0.3 skill, is [evidence/skill-eval-0.3.md](evidence/skill-eval-0.3.md). The earlier prompt 0.2 evaluation ([evidence/skill-eval.md](evidence/skill-eval.md)) is historical.
+
 ## Layout
 
 | Path | Contents |
