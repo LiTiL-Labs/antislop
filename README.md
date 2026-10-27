@@ -1,30 +1,87 @@
-# Anti-Slop · LiTiL Labs
+# Anti-Slop
 
-A native macOS menu-bar app for editing selected plain text. Select text in another app, press your rewrite key, review or edit the proposal, then press the key again or **Anti-slop** to replace that exact selection. A separate detection key lists quoted writing-pattern findings without changing the source.
+## Stop the Slop.
 
-The implementation is in [app](app/README.md). Build locally with:
+AI can turn a useful sentence into a paragraph nobody wants to read. Anti-Slop helps you cut the filler and get back to what you meant.
+
+Built by [LiTiL Labs](https://litil.ai), Anti-Slop is an editing skill you can use in your AI assistant. This repo also includes a native Mac app for editing selected text without copying it into a chat.
+
+**[Get the skill](.claude/skills/anti-slop/)** · **[Mac app](app/README.md)** · **[Read the editing rules](prompts/primary.md)**
+
+## Get the skill
+
+The skill gives your assistant a specific editing job: improve the passage while preserving its meaning and your voice. It returns one copyable replacement, or leaves the text alone when an edit would make it worse.
+
+With [Claude Code](https://code.claude.com/docs/en/skills) installed, clone this repo and start a session inside it:
 
 ```sh
-cd app
-./scripts/build-app.sh
-open build/Anti-slop.app
+git clone https://github.com/LiTiL-Labs/antislop.git
+cd antislop
+claude
 ```
 
-App builds use the local **Developer ID Application: LiTiL Labs, Inc. (5N876P35QC)** certificate by default and verify the signature. See [build instructions](app/README.md) for explicit signing overrides.
+Claude Code discovers the skill in `.claude/skills/anti-slop/`. Type `/anti-slop` followed by the passage you want edited.
 
-Settings is also onboarding. Choose Codex or Claude Code, assign both keys, set **Intelligence** (AI capability) and **Sentence Complexity** (prose), and choose Done. **Launch at login** defaults on; macOS owns registration and approval. The resident menu-bar icon always offers Settings.
+To make it available in your other Claude Code projects, copy the entire [`anti-slop` folder](.claude/skills/anti-slop/) to `~/.claude/skills/anti-slop/`. Keep the supporting files and license notices with it. If you already have that folder, compare it before replacing anything.
 
-A single hidden LiTiL Anti-Slop prompt combines the original editor and reviewed No AI Slop/Humanizer guidance. Em-dash removal is constant, with factual/legal fidelity and protected literal content taking precedence. No profile selector or custom writing instructions remain. An optional pasted style guide remains supported.
+The skill runs in the assistant that loads it. It does not require the Mac app or call a second model.
 
-Intelligence presets are Room Temp, Average, Smart and Genius. Sentence Complexity runs Caveman, Plain, Balanced, Polished and Lawyer. Genius has a green bloom and pixels; Lawyer has the same effect in orange. Titles use `#ED692B` and primary buttons use `#102D23`.
+## What it edits
 
-Both providers use their official local runtime and provider-owned account sign-in. The model only proposes text; native code owns the captured selection and validated explicit replacement. No API-token extraction, tool execution from source material, file mode, rich-format promise, analytics or cloud service is included.
+Empty introductions. The conclusion that repeats the introduction. A simple point buried under “it is important to note.” Those are the kinds of patterns Anti-Slop is built to catch.
 
-- [Current decisions](DECISIONS.md)
-- [Prompt composition](PROMPTING.md)
-- [Architecture and safety](ARCHITECTURE.md)
-- [Current revision evidence](app/evidence/litil-revision.md)
-- [Implementation history](app/IMPLEMENTATION_STATUS.md)
-- [Pinned sources and licenses](third_party/PROVENANCE.md)
+Its instructions put meaning ahead of style:
 
-The original handoff and receipts remain historical evidence; their old selectable-profile/custom-instruction controls are superseded by the September 30 LiTiL revision. Source snapshots and MIT license notices remain unchanged, with the notices included as files in the app bundle. The licenses menu item and window have been removed.
+- Cut filler, inflated framing and stock transitions when they weaken the passage.
+- Preserve the author's point of view, humor and tone.
+- Keep names, numbers, citations, quotations and technical identifiers intact.
+- Preserve uncertainty, negation and conditions. “May” cannot quietly become “will.”
+- Leave a good sentence alone.
+
+That last part matters in legal writing. A defined term is deliberate. So are “shall,” “must,” “only” and “unless.” Making a clause smoother is no improvement if the obligation changes.
+
+Anti-Slop reviews writing patterns. It does not determine whether AI wrote a passage, provide an authorship score, or promise to fool a detector. Review the proposed edit before using it.
+
+## From Caveman to Lawyer
+
+Choose how complex the prose should be:
+
+| Level | What you are asking for |
+| --- | --- |
+| **Caveman** | The shortest clear sentences and everyday words. Complete thoughts, with the conditions kept. |
+| **Plain** | Plain language and mostly short sentences. |
+| **Balanced** | Natural sentence variety. The default. |
+| **Polished** | A professional register without ornamental language. |
+| **Lawyer** | Precise, formal sentences with the qualifications spelled out. |
+
+You can also supply a style guide. It cannot override meaning or protected wording.
+
+Yes, the editing rules remove em dashes from editable prose. Exact quotations, citations, code and other protected literals stay literal.
+
+## Prefer a key to a chat window?
+
+The [Mac app](app/README.md) lives in your menu bar. Select plain text, press your assigned key and review the proposed rewrite in a floating panel. Edit it if you want. Press the key again or click **Anti-slop** to apply it.
+
+A separate **Slop check** key quotes the passages it flags and explains the writing pattern. It makes no changes. When you do apply a rewrite, the app checks that the original selection is still there; if it has changed, the draft stays in the panel.
+
+The app uses the official **Codex** or **Claude Code** runtime with your own signed-in account. Text is sent through the selected provider, so running the app on your Mac does not mean inference is offline.
+
+Requires macOS 13 or later, a supported signed-in runtime and Accessibility permission. TextEdit is the verified plain-text baseline; support in other editors depends on their accessibility controls. See [setup and build instructions](app/README.md), including signing options.
+
+The skill uses the app's editing rules, but the app's selection checks and replacement controls belong to the app.
+
+## Read the code. Check the claims.
+
+The prompts, validation logic and evaluation records are in this repo:
+
+- [Editing prompt](prompts/primary.md) and [Slop check prompt](prompts/detect.md)
+- [Skill evaluation](app/evidence/skill-eval-0.3.md), including the cases it missed
+- [Architecture and replacement checks](ARCHITECTURE.md)
+- [Prompt composition](PROMPTING.md), [current decisions](DECISIONS.md) and [implementation status](app/IMPLEMENTATION_STATUS.md)
+
+The recorded skill evaluation uses synthetic text and model graders; it is not a human editorial-quality study.
+
+## Credits
+
+LiTiL's editing rules incorporate adapted guidance from Peter Yang's **No AI Slop** and Siqi Chen / blader's **Humanizer**. Their MIT notices are included in the [skill](.claude/skills/anti-slop/licenses/) and [third-party sources](third_party/PROVENANCE.md). The upstream authors have not endorsed these adaptations.
+
